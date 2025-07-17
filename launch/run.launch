@@ -1,0 +1,15 @@
+<launch>
+
+    <param name="LiDAR_pointcloud_topic" type="string" value= "/livox/lidar" />
+    <param name="IMAGE_color" type="string" value= "/camera/color/image_raw" />  
+    <param name="IMU_topic" type="string" value= "/livox/imu" />
+
+
+     <node pkg="lio_project" type="lio_project_node" name="lio_project_node" output="screen"/>
+
+     <arg name="rviz" default="1" />
+    <group if="$(arg rviz)">
+        <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find lio_project)/config/default.rviz" />
+    </group>
+
+</launch>
