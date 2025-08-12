@@ -2,8 +2,8 @@
  * @Auther: yangj
  * @Description:  
  * @Date: 2025-06-19 09:17:49
- * @LastEditors: yangj
- * @LastEditTime: 2025-06-19 09:56:04
+ * @LastEditors: yangjun_d 295967654@qq.com
+ * @LastEditTime: 2025-08-12 03:27:19
  */
 #include"lio_node.h"
 
@@ -55,7 +55,16 @@ LIO::~LIO()
 void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
 {
 
-    pcl::PointCloud<pcl::PointXYZINormal> pl_full;
+    // pcl::PointCloud<pcl::PointXYZINormal> pl_full;
+    PointCloudXYZI pl_full;
+    PointCloudXYZI::Ptr ptr(new PointCloudXYZI());
+
+    mtx_buffer.lock();
+    if (msg->header.stamp.toSec() < last_timestamp_lidar)
+    {
+        ROS_ERROR("lidar loop back, clear buffer");
+        lid_raw_data_buffer.clear();
+    }
 
     uint plsize = msg->point_num;
     pl_full.resize( plsize );
@@ -103,23 +112,55 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
 
     pl_full.height = 1;
     pl_full.width = pl_full.size();
-    sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg( pl_full, output );
-    output.header.frame_id = "map";
-    output.header.stamp = msg->header.stamp;
-    // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
-    pub_pcl.publish( output );
     
+    *ptr = pl_full;
+    lid_raw_data_buffer.push_back(ptr);
+    lid_header_time_buffer.push_back(msg->header.stamp.toSec());
+    last_timestamp_lidar = msg->header.stamp.toSec();
+    mtx_buffer.unlock();
 
+    // sensor_msgs::PointCloud2 output;
+    // pcl::toROSMsg( pl_full, output );
+    // output.header.frame_id = "map";
+    // output.header.stamp = msg->header.stamp;
+    // // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
+    // pub_pcl.publish( output );
+    
 }
 
 void LIO::imu_cbk(const sensor_msgs::ImuConstPtr &msg_in)
 {
-    sensor_msgs::Imu::Ptr msg( new sensor_msgs::Imu( *msg_in ) );
+    if (last_timestamp_lidar < 0.0) return;
+
+    sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in)); // TODO: add time offset
     double timestamp = msg->header.stamp.toSec();
 
+    if (fabs(last_timestamp_lidar - timestamp) > 0.5 )
+    {
+        ROS_WARN("IMU and LiDAR not synced! delta time: %lf .\n", last_timestamp_lidar - timestamp);
+    }
     
+    msg->header.stamp = ros::Time().fromSec(timestamp);
+    mtx_buffer.lock();
 
+    if (last_timestamp_imu > 0.0 && timestamp < last_timestamp_imu)
+    {
+        mtx_buffer.unlock();
+        ROS_ERROR("imu loop back, offset: %lf \n", last_timestamp_imu - timestamp);
+        return;
+    }
+
+    if (last_timestamp_imu > 0.0 && timestamp > last_timestamp_imu + 0.2)
+    {
+
+        ROS_WARN("imu time stamp Jumps %0.4lf seconds \n", timestamp - last_timestamp_imu);
+        mtx_buffer.unlock();
+        return;
+    }
+
+    last_timestamp_imu = timestamp;
+    imu_buffer.push_back(msg);
+    mtx_buffer.unlock();
 
     return;
 }
@@ -144,3 +185,43 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg )
 
 }
 
+bool LIO::sync_packages(LidarMeasureGroup &meas)
+{
+    if (lid_raw_data_buffer.empty()) return false;
+    if (imu_buffer.empty()) return false;
+
+    if (!lidar_pushed)
+    {
+      // If not push the lidar into measurement data buffer
+      // 激光雷达点云指针缓存器的第一帧点云给 给雷达测量组meas.lidar
+      meas.lidar = lid_raw_data_buffer.front(); // push the first lidar topic
+      if (meas.lidar->points.size() <= 1) return false;  // 判断点云数量
+
+      meas.lidar_frame_beg_time = lid_header_time_buffer.front();                                                // generate lidar_frame_beg_time
+      meas.lidar_frame_end_time = meas.lidar_frame_beg_time + meas.lidar->points.back().curvature / double(1000); // calc lidar scan end time
+      meas.pcl_proc_cur = meas.lidar;
+      lidar_pushed = true;                                                                                       // flag
+    }
+
+    return true;
+}
+
+void LIO::run()
+{
+    // This function can be used to start the processing loop if needed
+    // For now, it is empty as the callbacks will handle the data processing
+    ros::Rate rate(30); // 30 Hz
+    while (ros::ok())
+    {
+        // Process any callbacks
+        ros::spinOnce();
+        if (!sync_packages(LidarMeasures))  
+        {
+        rate.sleep();
+        continue;
+        }
+
+    }
+
+    ros::spin();
+}

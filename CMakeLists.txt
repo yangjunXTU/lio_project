@@ -23,8 +23,14 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
+# find_package(OpenCV REQUIRED)
+# find_package(Boost REQUIRED COMPONENTS system)
+
+find_package(Eigen3 REQUIRED)
+find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(Boost REQUIRED COMPONENTS system)
+find_package(Sophus REQUIRED)
+find_package(Boost REQUIRED COMPONENTS thread)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -114,8 +120,9 @@ find_package(Boost REQUIRED COMPONENTS system)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES msg_vis
-  CATKIN_DEPENDS cv_bridge message_generation nav_msgs roscpp roslz4 rospy std_msgs
+  CATKIN_DEPENDS cv_bridge message_generation nav_msgs roscpp roslz4 rospy std_msgs geometry_msgs message_runtime image_transport
 #  DEPENDS system_lib
+  DEPENDS EIGEN3 PCL OpenCV Sophus
 )
 
 ###########
@@ -125,9 +132,13 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
+  /usr/local/include
   ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
+  ${PCL_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  ${Sophus_INCLUDE_DIRS}
 )
 
 message(${OpenCV_INCLUDE_DIRS})
@@ -159,8 +170,12 @@ add_executable(${PROJECT_NAME}_node src/main.cpp src/lio_node.cpp)
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
-  ${OpenCV_LIBS}
+  # ${OpenCV_LIBS}
   ${Boost_LIBRARIES}
+
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+  ${Sophus_LIBRARIES}
 )
 
 #############
