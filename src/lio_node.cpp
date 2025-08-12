@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-12 03:27:19
+ * @LastEditTime: 2025-08-12 07:35:16
  */
 #include"lio_node.h"
 
@@ -202,6 +202,31 @@ bool LIO::sync_packages(LidarMeasureGroup &meas)
       meas.pcl_proc_cur = meas.lidar;
       lidar_pushed = true;                                                                                       // flag
     }
+    // TODO: add imu data to meas
+    if (last_timestamp_imu < meas.lidar_frame_end_time)
+    { 
+      return false;
+    }
+
+    struct MeasureGroup m;
+    m.imu.clear();
+    m.lio_time = meas.lidar_frame_end_time;
+
+    mtx_buffer.lock();
+    while (!imu_buffer.empty())
+    {
+      if (imu_buffer.front()->header.stamp.toSec() > meas.lidar_frame_end_time) break;
+      m.imu.push_back(imu_buffer.front()); // 添加IMU数据
+      imu_buffer.pop_front(); // 移除处理过的IMU数据
+    }
+    // 移除激光雷达数据和时间戳
+    lid_raw_data_buffer.pop_front();
+    lid_header_time_buffer.pop_front();
+    mtx_buffer.unlock();
+
+    // meas.lio_vio_flg = LIO; // 标记为LIO模式
+    meas.measures.push_back(m); // 将测量数据添加到队列中
+    lidar_pushed = false; // 重置标记
 
     return true;
 }
@@ -217,8 +242,9 @@ void LIO::run()
         ros::spinOnce();
         if (!sync_packages(LidarMeasures))  
         {
-        rate.sleep();
-        continue;
+            ROS_INFO("[LidarMeasures] LidarMeasures: %.6f",LidarMeasures.lidar_frame_end_time);
+            rate.sleep();
+            continue;
         }
 
     }
