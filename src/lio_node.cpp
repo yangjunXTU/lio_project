@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-12 07:35:16
+ * @LastEditTime: 2025-08-12 07:46:32
  */
 #include"lio_node.h"
 
@@ -243,6 +243,9 @@ void LIO::run()
         if (!sync_packages(LidarMeasures))  
         {
             ROS_INFO("[LidarMeasures] LidarMeasures: %.6f",LidarMeasures.lidar_frame_end_time);
+            ROS_INFO("[LidarMeasures] LidarMeasures: %d",LidarMeasures.measures.size());
+            ROS_INFO("[LidarMeasures] LidarMeasures: %d",LidarMeasures.lidar->points.size());
+            ROS_INFO("[LidarMeasures] LidarMeasures: %d",LidarMeasures.measures);
             rate.sleep();
             continue;
         }
