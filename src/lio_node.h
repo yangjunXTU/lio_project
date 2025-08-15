@@ -1,3 +1,11 @@
+/*
+ * @Author: yangjun_d 295967654@qq.com
+ * @Date: 2025-08-12 02:03:20
+ * @LastEditors: yangjun_d 295967654@qq.com
+ * @LastEditTime: 2025-08-15 03:24:08
+ * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include <opencv2/highgui/highgui.hpp>
@@ -25,7 +33,10 @@
 #include<nav_msgs/Odometry.h>
 #include<sensor_msgs/CameraInfo.h>
 #include<sensor_msgs/Imu.h>
-
+#include "utils/types.h"
+#include "iekf.h"
+#include "utils/eigen_types.h"
+#include "static_imu_init.h"
 
 using namespace cv;
 using namespace std;
@@ -33,12 +44,67 @@ using namespace std;
 #define ANSI_COLOR_BLUE_BOLD "\x1b[1;34m"
 
 
+struct MeasureGroup
+{
+//   double vio_time;
+  double lio_time;
+  deque<sensor_msgs::Imu::ConstPtr> imu;
+  deque<IMUPtr> imu2;
+  //   cv::Mat img;
+  MeasureGroup()
+  {
+    // vio_time = 0.0;
+    lio_time = 0.0;
+  };
+};
+
+struct LidarMeasureGroup
+{
+  double lidar_frame_beg_time;
+  double lidar_frame_end_time;
+  double last_lio_update_time;
+  PointCloudXYZI::Ptr lidar;
+  PointCloudXYZI::Ptr pcl_proc_cur;
+  PointCloudXYZI::Ptr pcl_proc_next;
+  deque<struct MeasureGroup> measures;
+//   EKF_STATE lio_vio_flg;
+  int lidar_scan_index_now;
+
+  LidarMeasureGroup()
+  {
+    lidar_frame_beg_time = -0.0;
+    lidar_frame_end_time = 0.0;
+    last_lio_update_time = -1.0;
+    // lio_vio_flg = WAIT;
+    this->lidar.reset(new PointCloudXYZI());
+    this->pcl_proc_cur.reset(new PointCloudXYZI());
+    this->pcl_proc_next.reset(new PointCloudXYZI());
+    this->measures.clear();
+    lidar_scan_index_now = 0;
+    last_lio_update_time = -1.0;
+  };
+};
+
 class LIO
 {
 private:
     /* data */
-public:
+    IESKFD ieskf_;
+    std::vector<NavStated> imu_states_;
+    StaticIMUInit imu_init_;
 
+public:
+    std::mutex mtx_buffer, mtx_buffer_imu_prop;
+    deque<PointCloudXYZI::Ptr> lid_raw_data_buffer;
+    deque<double> lid_header_time_buffer;
+    deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
+    double last_timestamp_lidar = -1.0, last_timestamp_imu = -1.0;
+    bool lidar_pushed = false;
+    bool is_first_frame = false;
+    double _first_lidar_time = 0.0;
+
+    bool imu_need_init_ = true;
+    
     std::deque< sensor_msgs::CompressedImageConstPtr > g_received_compressed_img_msg;
     ros::NodeHandle nh;
     ros::Subscriber sub_depth_img_compLz4,sub_depth_img_comp, sub_img_comp, sub_pcl, sub_imu,sub_depth_img, sub_img,sub_camera_odom,sub_apriltag;
@@ -53,10 +119,17 @@ public:
 
     pcl::PointCloud<pcl::PointXYZI> output_cloud;
 
+    LidarMeasureGroup LidarMeasures;
+
     void image_callback( const sensor_msgs::ImageConstPtr &msg );
     void feat_points_cbk( const livox_ros_driver2::CustomMsg::ConstPtr &msg  );
     void imu_cbk(const sensor_msgs::ImuConstPtr &msg_in);
-
+    void run();
+    bool sync_packages(LidarMeasureGroup &meas);
+    void handleFirstFrame();
+    IMUPtr imu2IMU(const sensor_msgs::ImuConstPtr &mg_in);
+    void ProcessIMU();
+    void TryInitIMU();
 
     LIO(/* args */);
     ~LIO();

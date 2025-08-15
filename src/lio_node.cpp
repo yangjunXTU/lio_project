@@ -2,10 +2,11 @@
  * @Auther: yangj
  * @Description:  
  * @Date: 2025-06-19 09:17:49
- * @LastEditors: yangj
- * @LastEditTime: 2025-06-19 09:56:04
+ * @LastEditors: yangjun_d 295967654@qq.com
+ * @LastEditTime: 2025-08-15 06:22:06
  */
 #include"lio_node.h"
+#include"utils/eigen_types.h"
 
 LIO::LIO(/* args */)
 {
@@ -33,7 +34,7 @@ LIO::LIO(/* args */)
     pub_img_comp = nh.advertise<sensor_msgs::Image>("/pub_img/image_raw",1000);
     pub_img_comp_info = nh.advertise<sensor_msgs::CameraInfo>("/pub_img/camera_info",1000);
     pub_depth_img_comp = nh.advertise<sensor_msgs::Image>("/pub_depth_img_comp",1000);
-    pub_pcl = nh.advertise<sensor_msgs::PointCloud2>("/mid360",1000);
+    pub_pcl = nh.advertise<sensor_msgs::PointCloud2>("/mid360/orin",1000);
     pub_camera_odom = nh.advertise<nav_msgs::Odometry>("/pub_camera_odom",1000);
     pub_path = nh.advertise<nav_msgs::Path>("/pub_apriltag_path",1000);
 
@@ -55,7 +56,16 @@ LIO::~LIO()
 void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
 {
 
-    pcl::PointCloud<pcl::PointXYZINormal> pl_full;
+    // pcl::PointCloud<pcl::PointXYZINormal> pl_full;
+    PointCloudXYZI pl_full;
+    PointCloudXYZI::Ptr ptr(new PointCloudXYZI());
+
+    mtx_buffer.lock();
+    if (msg->header.stamp.toSec() < last_timestamp_lidar)
+    {
+        ROS_ERROR("lidar loop back, clear buffer");
+        lid_raw_data_buffer.clear();
+    }
 
     uint plsize = msg->point_num;
     pl_full.resize( plsize );
@@ -103,6 +113,13 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
 
     pl_full.height = 1;
     pl_full.width = pl_full.size();
+    
+    *ptr = pl_full;
+    lid_raw_data_buffer.push_back(ptr);
+    lid_header_time_buffer.push_back(msg->header.stamp.toSec());
+    last_timestamp_lidar = msg->header.stamp.toSec();
+    mtx_buffer.unlock();
+
     sensor_msgs::PointCloud2 output;
     pcl::toROSMsg( pl_full, output );
     output.header.frame_id = "map";
@@ -110,16 +127,41 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
     // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
     pub_pcl.publish( output );
     
-
 }
 
 void LIO::imu_cbk(const sensor_msgs::ImuConstPtr &msg_in)
 {
-    sensor_msgs::Imu::Ptr msg( new sensor_msgs::Imu( *msg_in ) );
+    if (last_timestamp_lidar < 0.0) return;
+
+    sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in)); // TODO: add time offset
     double timestamp = msg->header.stamp.toSec();
 
+    if (fabs(last_timestamp_lidar - timestamp) > 0.5 )
+    {
+        ROS_WARN("IMU and LiDAR not synced! delta time: %lf .\n", last_timestamp_lidar - timestamp);
+    }
     
+    msg->header.stamp = ros::Time().fromSec(timestamp);
+    mtx_buffer.lock();
 
+    if (last_timestamp_imu > 0.0 && timestamp < last_timestamp_imu)
+    {
+        mtx_buffer.unlock();
+        ROS_ERROR("imu loop back, offset: %lf \n", last_timestamp_imu - timestamp);
+        return;
+    }
+
+    if (last_timestamp_imu > 0.0 && timestamp > last_timestamp_imu + 0.2)
+    {
+
+        ROS_WARN("imu time stamp Jumps %0.4lf seconds \n", timestamp - last_timestamp_imu);
+        mtx_buffer.unlock();
+        return;
+    }
+
+    last_timestamp_imu = timestamp;
+    imu_buffer.push_back(msg);
+    mtx_buffer.unlock();
 
     return;
 }
@@ -144,3 +186,150 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg )
 
 }
 
+bool LIO::sync_packages(LidarMeasureGroup &meas)
+{
+    if (lid_raw_data_buffer.empty()) return false;
+    if (imu_buffer.empty()) return false;
+
+    if (!lidar_pushed)
+    {
+      // If not push the lidar into measurement data buffer
+      // 激光雷达点云指针缓存器的第一帧点云给 给雷达测量组meas.lidar
+      meas.lidar = lid_raw_data_buffer.front(); // push the first lidar topic
+      if (meas.lidar->points.size() <= 1) return false;  // 判断点云数量
+
+      meas.lidar_frame_beg_time = lid_header_time_buffer.front();                                                // generate lidar_frame_beg_time
+      meas.lidar_frame_end_time = meas.lidar_frame_beg_time + meas.lidar->points.back().curvature / double(1000); // calc lidar scan end time
+      meas.pcl_proc_cur = meas.lidar;
+      lidar_pushed = true;                                                                                       // flag
+    }
+    // TODO: add imu data to meas
+    if (last_timestamp_imu < meas.lidar_frame_end_time)
+    { 
+      return false;
+    }
+
+    struct MeasureGroup m;
+    m.imu.clear();
+    m.imu2.clear();
+    m.lio_time = meas.lidar_frame_end_time;
+
+    mtx_buffer.lock();
+    while (!imu_buffer.empty())
+    {
+      if (imu_buffer.front()->header.stamp.toSec() > meas.lidar_frame_end_time) break;
+      IMUPtr imu2 = imu2IMU(imu_buffer.front());
+      m.imu2.emplace_back(imu2);
+    //   ROS_INFO("imu2->timestamp_: %.6f ",  imu2->timestamp_);
+      m.imu.push_back(imu_buffer.front()); // 添加IMU数据
+      imu_buffer.pop_front(); // 移除处理过的IMU数据
+    }
+    // 移除激光雷达数据和时间戳
+    lid_raw_data_buffer.pop_front();
+    lid_header_time_buffer.pop_front();
+    mtx_buffer.unlock();
+
+    // meas.lio_vio_flg = LIO; // 标记为LIO模式
+    meas.measures.push_back(m); // 将测量数据添加到队列中
+    lidar_pushed = false; // 重置标记
+
+    return true;
+}
+
+void LIO::handleFirstFrame() 
+{
+  if (!is_first_frame)
+  {
+    _first_lidar_time = LidarMeasures.last_lio_update_time;
+    // p_imu->first_lidar_time = _first_lidar_time; // Only for IMU data log
+    is_first_frame = true;
+    cout << "FIRST LIDAR FRAME!" << endl;
+  }
+}
+
+
+IMUPtr LIO::imu2IMU(const sensor_msgs::ImuConstPtr &msg_in)
+{
+    sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in));
+
+    IMUPtr imu;
+    imu =std::make_shared<IMU>(msg->header.stamp.toSec(),
+                                Eigen::Vector3d(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z),
+                                Eigen::Vector3d(msg->linear_acceleration.x * 9.80665, msg->linear_acceleration.y * 9.80665,
+                                    msg->linear_acceleration.z * 9.80665));
+    return imu;
+}
+
+void LIO::ProcessIMU()
+{
+    // ROS_INFO("ProcessIMU....");
+    // imu init
+    if (imu_need_init_) {
+        // 初始化IMU系统
+        // ROS_INFO("start init---->");
+        TryInitIMU();
+        return;
+    }
+
+    // predict imu state
+    imu_states_.clear();
+    imu_states_.emplace_back(ieskf_.GetNominalState());
+
+    for (auto &imu : LidarMeasures.measures.back().imu2)
+    {
+        ieskf_.Predict(*imu);
+        imu_states_.emplace_back(ieskf_.GetNominalState());
+    }
+    ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
+
+    
+}
+
+void LIO::TryInitIMU()
+{
+    for (auto imu : LidarMeasures.measures.back().imu2) {
+        imu_init_.AddIMU(*imu);
+    }
+    
+    if(imu_init_.InitSuccess())
+    {
+        IESKFD::Options options;
+        options.gyro_var_ = sqrt(imu_init_.GetCovGyro()[0]);
+        options.acce_var_ = sqrt(imu_init_.GetCovAcce()[0]);
+        ieskf_.SetInitialConditions(options,imu_init_.GetInitBg(),imu_init_.GetInitBa(),imu_init_.GetGravity());
+        imu_need_init_ = false;
+        ROS_INFO("IMU init success ---->");
+        // ROS_INFO("-----------------------------------------------------------");
+    }
+    
+}
+
+void LIO::run()
+{
+    // This function can be used to start the processing loop if needed
+    // For now, it is empty as the callbacks will handle the data processing
+    ros::Rate rate(30); // 30 Hz
+    while (ros::ok())
+    {
+        // Process any callbacks
+        ros::spinOnce();
+        if (!sync_packages(LidarMeasures))  
+        {   
+            // ROS_INFO("--------------------------------------------");
+            // // std::cout <<"imu: " << LidarMeasures.measures.back().imu.back()->header.stamp.toSec() << std::endl;
+            // ROS_INFO("[LidarMeasures] LidarMeasures measures.size: %ld",LidarMeasures.measures.size());
+            // ROS_INFO("[LidarMeasures] LidarMeasures lidar_frame_end_time: %.6f",LidarMeasures.lidar_frame_end_time);
+            // std::cout << LidarMeasures.measures.front().imu2.back()->timestamp_ << std::endl;
+            // ROS_INFO("[LidarMeasures] LidarMeasures imu lio time: %.6f",LidarMeasures.measures.front().lio_time);
+            // LidarMeasures.measures.pop_front();
+            rate.sleep();
+            continue;
+        }
+        handleFirstFrame();
+        ProcessIMU();
+
+        
+    }
+
+    ros::spin();
+}
