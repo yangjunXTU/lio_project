@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-13 02:24:16
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-14 07:39:26
+ * @LastEditTime: 2025-08-15 00:54:55
  * @FilePath: /lio_project_wk/src/lio_project/src/iekf.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -81,7 +81,9 @@ class IESKF
             cov_.template block<3, 3>(6, 6) = 0.1 * kDEG2RAD * Mat3T::Identity();
         }
 
-        ~IESKF();
+        NavStateT GetNominalState() const { return NavStateT(current_time_, R_, p_, v_, bg_, ba_); }
+
+        // ~IESKF();
         bool Predict(const IMU& imu);
 
     private:
@@ -129,6 +131,9 @@ class IESKF
         Options options_;
 
 };
+
+using IESKFD = IESKF<double>;
+using IESKFF = IESKF<float>;
 
 template <typename S>
 bool IESKF<S>::Predict(const IMU& imu){

@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-14 09:30:44
+ * @LastEditTime: 2025-08-15 01:02:46
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
@@ -262,8 +262,20 @@ IMUPtr LIO::imu2IMU(const sensor_msgs::ImuConstPtr &msg_in)
 
 void LIO::ProcessIMU()
 {
-    
-    return;
+    imu_states_.clear();
+    imu_states_.emplace_back(ieskf_.GetNominalState());
+
+    for (auto &imu : LidarMeasures.measures.back().imu2)
+    {
+        ieskf_.Predict(*imu);
+        imu_states_.emplace_back(ieskf_.GetNominalState());
+    }
+    ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
+}
+
+void LIO::TryInitIMU()
+{
+
 }
 
 void LIO::run()
