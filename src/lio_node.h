@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-12 03:45:01
+ * @LastEditTime: 2025-08-14 09:30:15
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -34,6 +34,8 @@
 #include<sensor_msgs/CameraInfo.h>
 #include<sensor_msgs/Imu.h>
 #include "utils/types.h"
+#include "iekf.h"
+#include "utils/eigen_types.h"
 
 using namespace cv;
 using namespace std;
@@ -46,6 +48,7 @@ struct MeasureGroup
 //   double vio_time;
   double lio_time;
   deque<sensor_msgs::Imu::ConstPtr> imu;
+  deque<IMUPtr> imu2;
 //   cv::Mat img;
   MeasureGroup()
   {
@@ -92,6 +95,8 @@ public:
     deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
     double last_timestamp_lidar = -1.0, last_timestamp_imu = -1.0;
     bool lidar_pushed = false;
+    bool is_first_frame = false;
+    double _first_lidar_time = 0.0;
     
     std::deque< sensor_msgs::CompressedImageConstPtr > g_received_compressed_img_msg;
     ros::NodeHandle nh;
@@ -114,6 +119,9 @@ public:
     void imu_cbk(const sensor_msgs::ImuConstPtr &msg_in);
     void run();
     bool sync_packages(LidarMeasureGroup &meas);
+    void handleFirstFrame();
+    IMUPtr imu2IMU(const sensor_msgs::ImuConstPtr &mg_in);
+    void ProcessIMU();
 
     LIO(/* args */);
     ~LIO();
