@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 01:02:33
+ * @LastEditTime: 2025-08-15 03:24:08
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -36,6 +36,7 @@
 #include "utils/types.h"
 #include "iekf.h"
 #include "utils/eigen_types.h"
+#include "static_imu_init.h"
 
 using namespace cv;
 using namespace std;
@@ -49,7 +50,7 @@ struct MeasureGroup
   double lio_time;
   deque<sensor_msgs::Imu::ConstPtr> imu;
   deque<IMUPtr> imu2;
-//   cv::Mat img;
+  //   cv::Mat img;
   MeasureGroup()
   {
     // vio_time = 0.0;
@@ -90,6 +91,7 @@ private:
     /* data */
     IESKFD ieskf_;
     std::vector<NavStated> imu_states_;
+    StaticIMUInit imu_init_;
 
 public:
     std::mutex mtx_buffer, mtx_buffer_imu_prop;
@@ -100,6 +102,8 @@ public:
     bool lidar_pushed = false;
     bool is_first_frame = false;
     double _first_lidar_time = 0.0;
+
+    bool imu_need_init_ = true;
     
     std::deque< sensor_msgs::CompressedImageConstPtr > g_received_compressed_img_msg;
     ros::NodeHandle nh;

@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-15 02:52:53
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 03:12:17
+ * @LastEditTime: 2025-08-15 06:06:30
  * @FilePath: /lio_project_wk/src/lio_project/src/static_imu_init.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -33,13 +33,13 @@ class StaticIMUInit {
    public:
     struct Options {
         Options() {}
-        double init_time_seconds_ = 10.0;     // 静止时间
-        int init_imu_queue_max_size_ = 2000;  // 初始化IMU队列最大长度
+        double init_time_seconds_ = 5.0;     // 静止时间 10
+        int init_imu_queue_max_size_ = 600;  // 初始化IMU队列最大长度 2000
         int static_odom_pulse_ = 5;           // 静止时轮速计输出噪声
         double max_static_gyro_var = 0.5;     // 静态下陀螺测量方差
         double max_static_acce_var = 0.05;    // 静态下加计测量方差
         double gravity_norm_ = 9.81;          // 重力大小
-        bool use_speed_for_static_checking_ = true;  // 是否使用odom来判断车辆静止（部分数据集没有odom选项）
+        bool use_speed_for_static_checking_ = false;  // 是否使用odom来判断车辆静止（部分数据集没有odom选项）
     };
 
     /// 构造函数

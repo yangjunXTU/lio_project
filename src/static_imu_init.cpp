@@ -13,7 +13,7 @@ bool StaticIMUInit::AddIMU(const IMU& imu) {
     }
 
     if (options_.use_speed_for_static_checking_ && !is_static_) {
-        ROS_INFO("[imu init] 等待车辆静止");
+        ROS_INFO("[imu init] Wait for the vehicle to come to a stop"); //等待车辆静止
         init_imu_deque_.clear();
         return false;
     }
@@ -21,6 +21,7 @@ bool StaticIMUInit::AddIMU(const IMU& imu) {
     if (init_imu_deque_.empty()) {
         // 记录初始静止时间
         init_start_time_ = imu.timestamp_;
+        ROS_INFO("[imu init] init_start_time_");
     }
 
     // 记入初始化队列
@@ -29,6 +30,7 @@ bool StaticIMUInit::AddIMU(const IMU& imu) {
     double init_time = imu.timestamp_ - init_start_time_;  // 初始化经过时间
     if (init_time > options_.init_time_seconds_) {
         // 尝试初始化逻辑
+        ROS_INFO("TryInit imu---->");
         TryInit();
     }
 
@@ -90,10 +92,12 @@ bool StaticIMUInit::TryInit() {
     init_bg_ = mean_gyro;
     init_ba_ = mean_acce;
 
-    std::cout << "[imu init] IMU 初始化成功，初始化时间= " << current_time_ - init_start_time_ << ", bg = " << init_bg_.transpose()
-              << ", ba = " << init_ba_.transpose() << ", gyro sq = " << cov_gyro_.transpose()
-              << ", acce sq = " << cov_acce_.transpose() << ", grav = " << gravity_.transpose()
-              << ", norm: " << gravity_.norm();
+    // std::cout << "[imu init] IMU 初始化成功，初始化时间= " << current_time_ - init_start_time_ << ", bg = " << init_bg_.transpose()
+    //           << ", ba = " << init_ba_.transpose() << ", gyro sq = " << cov_gyro_.transpose()
+    //           << ", acce sq = " << cov_acce_.transpose() << ", grav = " << gravity_.transpose()
+    //           << ", norm: " << gravity_.norm();
+    ROS_INFO("[imu init]: imu init success, time: %.3f, bg: %.3f, ba: %.3f, gyro sq = %.3f, acce sq = %.3f", 
+        current_time_ - init_start_time_, init_bg_.transpose(),init_ba_.transpose(), cov_gyro_.transpose(),cov_acce_.transpose());
     std::cout << "[imu init] mean gyro: " << mean_gyro.transpose() << " acce: " << mean_acce.transpose();
     init_success_ = true;
     return true;

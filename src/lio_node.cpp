@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 01:02:46
+ * @LastEditTime: 2025-08-15 06:22:06
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
@@ -262,6 +262,16 @@ IMUPtr LIO::imu2IMU(const sensor_msgs::ImuConstPtr &msg_in)
 
 void LIO::ProcessIMU()
 {
+    // ROS_INFO("ProcessIMU....");
+    // imu init
+    if (imu_need_init_) {
+        // 初始化IMU系统
+        // ROS_INFO("start init---->");
+        TryInitIMU();
+        return;
+    }
+
+    // predict imu state
     imu_states_.clear();
     imu_states_.emplace_back(ieskf_.GetNominalState());
 
@@ -271,11 +281,27 @@ void LIO::ProcessIMU()
         imu_states_.emplace_back(ieskf_.GetNominalState());
     }
     ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
+
+    
 }
 
 void LIO::TryInitIMU()
 {
-
+    for (auto imu : LidarMeasures.measures.back().imu2) {
+        imu_init_.AddIMU(*imu);
+    }
+    
+    if(imu_init_.InitSuccess())
+    {
+        IESKFD::Options options;
+        options.gyro_var_ = sqrt(imu_init_.GetCovGyro()[0]);
+        options.acce_var_ = sqrt(imu_init_.GetCovAcce()[0]);
+        ieskf_.SetInitialConditions(options,imu_init_.GetInitBg(),imu_init_.GetInitBa(),imu_init_.GetGravity());
+        imu_need_init_ = false;
+        ROS_INFO("IMU init success ---->");
+        // ROS_INFO("-----------------------------------------------------------");
+    }
+    
 }
 
 void LIO::run()
@@ -289,10 +315,10 @@ void LIO::run()
         ros::spinOnce();
         if (!sync_packages(LidarMeasures))  
         {   
-            ROS_INFO("--------------------------------------------");
-            // std::cout <<"imu: " << LidarMeasures.measures.back().imu.back()->header.stamp.toSec() << std::endl;
-            ROS_INFO("[LidarMeasures] LidarMeasures measures.size: %ld",LidarMeasures.measures.size());
-            ROS_INFO("[LidarMeasures] LidarMeasures lidar_frame_end_time: %.6f",LidarMeasures.lidar_frame_end_time);
+            // ROS_INFO("--------------------------------------------");
+            // // std::cout <<"imu: " << LidarMeasures.measures.back().imu.back()->header.stamp.toSec() << std::endl;
+            // ROS_INFO("[LidarMeasures] LidarMeasures measures.size: %ld",LidarMeasures.measures.size());
+            // ROS_INFO("[LidarMeasures] LidarMeasures lidar_frame_end_time: %.6f",LidarMeasures.lidar_frame_end_time);
             // std::cout << LidarMeasures.measures.front().imu2.back()->timestamp_ << std::endl;
             // ROS_INFO("[LidarMeasures] LidarMeasures imu lio time: %.6f",LidarMeasures.measures.front().lio_time);
             // LidarMeasures.measures.pop_front();
