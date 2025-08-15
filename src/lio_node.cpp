@@ -3,10 +3,12 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 06:22:06
+ * @LastEditTime: 2025-08-15 08:50:13
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
+#include <execution>
+
 
 LIO::LIO(/* args */)
 {
@@ -35,9 +37,16 @@ LIO::LIO(/* args */)
     pub_img_comp_info = nh.advertise<sensor_msgs::CameraInfo>("/pub_img/camera_info",1000);
     pub_depth_img_comp = nh.advertise<sensor_msgs::Image>("/pub_depth_img_comp",1000);
     pub_pcl = nh.advertise<sensor_msgs::PointCloud2>("/mid360/orin",1000);
+    pub_pcl_un = nh.advertise<sensor_msgs::PointCloud2>("/mid360/undistort",1000);
     pub_camera_odom = nh.advertise<nav_msgs::Odometry>("/pub_camera_odom",1000);
     pub_path = nh.advertise<nav_msgs::Path>("/pub_apriltag_path",1000);
 
+    std::vector<double> ext_t = {-0.011, -0.02329, 0.04412};
+    std::vector<double> ext_r ={1, 0, 0, 0, 1, 0, 0, 0, 1};
+
+    Eigen::Vector3d lidar_T_wrt_IMU = VecFromArray(ext_t);
+    Eigen::Matrix3d lidar_R_wrt_IMU = MatFromArray(ext_r);
+    TIL_ = SE3(lidar_R_wrt_IMU, lidar_T_wrt_IMU);
 }
 
 
@@ -282,7 +291,8 @@ void LIO::ProcessIMU()
     }
     ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
 
-    
+    // lildar undistort
+    Undistort();
 }
 
 void LIO::TryInitIMU()
@@ -302,6 +312,43 @@ void LIO::TryInitIMU()
         // ROS_INFO("-----------------------------------------------------------");
     }
     
+}
+
+void LIO::Undistort()
+{
+    auto cloud = LidarMeasures.pcl_proc_cur;
+    auto imu_state = ieskf_.GetNominalState();
+    SE3 T_end = SE3(imu_state.R_, imu_state.p_);
+
+    //std::execution::par_unseq, 并发模式 c++17以上
+    std::for_each( cloud->points.begin(), cloud->points.end(),[&](auto &pt){
+        SE3 Ti = T_end;
+        NavStated match;
+        auto time_p = pt.curvature / double(1000);
+        //* 1e-3
+        PoseInterp<NavStated>(
+            LidarMeasures.lidar_frame_beg_time + time_p , imu_states_, [](const NavStated &s) { return s.timestamp_; },
+            [](const NavStated &s) { return s.GetSE3(); }, Ti, match);
+
+        Eigen::Vector3d pi = ToVec3d(pt);
+        Eigen::Vector3d p_compensate = TIL_.inverse() * T_end.inverse() * Ti * TIL_ * pi;
+        
+        pt.x = p_compensate(0);
+        pt.y = p_compensate(1);
+        pt.z = p_compensate(2);
+
+    });
+
+    // scan_undistort_ = cloud;
+
+    sensor_msgs::PointCloud2 output;
+    pcl::toROSMsg( *cloud, output );
+    output.header.frame_id = "map";
+    // output.header.stamp = ros::Time::fromSec(LidarMeasures.lidar_frame_end_time);
+    
+    // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
+    pub_pcl_un.publish( output );
+
 }
 
 void LIO::run()

@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-13 02:24:16
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 00:54:55
+ * @LastEditTime: 2025-08-15 07:24:03
  * @FilePath: /lio_project_wk/src/lio_project/src/iekf.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -11,14 +11,15 @@
  #include"utils/eigen_types.h"
  #include"utils/nav_state.h"
  #include"utils/imu.h"
+ #include"utils/math_utils.h"
  
 #ifndef H_IEKF_LIO_HPP
 #define H_IEKF_LIO_HPP
 
 // 常量定义
-constexpr double kDEG2RAD = M_PI / 180.0;  // deg->rad
-constexpr double kRAD2DEG = 180.0 / M_PI;  // rad -> deg
-constexpr double G_m_s2 = 9.81;            // 重力大小
+// constexpr double kDEG2RAD = M_PI / 180.0;  // deg->rad
+// constexpr double kRAD2DEG = 180.0 / M_PI;  // rad -> deg
+// constexpr double G_m_s2 = 9.81;            // 重力大小
 
 template <typename S>
 class IESKF
