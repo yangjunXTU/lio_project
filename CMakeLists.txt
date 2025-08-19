@@ -156,7 +156,7 @@ message(${OpenCV_INCLUDE_DIRS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/main.cpp src/lio_node.cpp src/static_imu_init.cpp)
+add_executable(${PROJECT_NAME}_node src/main.cpp src/lio_node.cpp src/static_imu_init.cpp src/ndt_inc.cpp include/timer/timer.cc)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the

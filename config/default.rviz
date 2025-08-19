@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /PointCloud21
         - /PointCloud22
       Splitter Ratio: 0.5
     Tree Height: 1131
@@ -271,8 +272,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 3.165048837661743
-        Min Value: -0.723192572593689
+        Max Value: 3.2769854068756104
+        Min Value: -0.9497701525688171
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -289,7 +290,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.009999999776482582
+      Size (m): 0.019999999552965164
       Style: Flat Squares
       Topic: /mid360/undistort
       Unreliable: false
@@ -324,7 +325,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 23.11774444580078
+      Distance: 15.636983871459961
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -332,17 +333,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -0.18657992780208588
-        Y: -0.5062536597251892
-        Z: 1.8462045192718506
+        X: -0.8255603313446045
+        Y: 0.612799346446991
+        Z: 0.9309595823287964
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5547975301742554
+      Pitch: 0.2697974443435669
       Target Frame: <Fixed Frame>
-      Yaw: 4.044376850128174
+      Yaw: 4.772562503814697
     Saved: ~
 Window Geometry:
   Displays:
@@ -362,5 +363,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 2457
-  X: 951
-  Y: 486
+  X: 731
+  Y: 423

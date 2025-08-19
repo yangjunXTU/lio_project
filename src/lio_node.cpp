@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 08:50:13
+ * @LastEditTime: 2025-08-19 09:18:37
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
@@ -12,6 +12,8 @@
 
 LIO::LIO(/* args */)
 {
+    FullCloudPtr scan_undistort_{new FullPointCloudType()};
+    
     nh.param<std::string> ("/LiDAR_pointcloud_topic",LiDAR_pointcloud_topic,std::string("/livox/lidar"));
     nh.param<std::string> ("/IMAGE_color",IMAGE_color,std::string("/camera/color/image_raw"));
     nh.param<std::string> ("/IMU_topic",IMU_topic,std::string("/livox/imu"));
@@ -293,6 +295,8 @@ void LIO::ProcessIMU()
 
     // lildar undistort
     Undistort();
+
+    Align();
 }
 
 void LIO::TryInitIMU()
@@ -316,6 +320,7 @@ void LIO::TryInitIMU()
 
 void LIO::Undistort()
 {
+    // scan_undistort_.clear();
     auto cloud = LidarMeasures.pcl_proc_cur;
     auto imu_state = ieskf_.GetNominalState();
     SE3 T_end = SE3(imu_state.R_, imu_state.p_);
@@ -340,6 +345,7 @@ void LIO::Undistort()
     });
 
     // scan_undistort_ = cloud;
+    // TODO: 需要解决scan_undistort_、cloud数据类型不匹配的问题；
 
     sensor_msgs::PointCloud2 output;
     pcl::toROSMsg( *cloud, output );
@@ -349,6 +355,21 @@ void LIO::Undistort()
     // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
     pub_pcl_un.publish( output );
 
+}
+
+void LIO::Align()
+{
+    FullCloudPtr scan_undistort_trans(new FullPointCloudType);
+    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_trans, TIL_.matrix().cast<float>());
+    scan_undistort_ = scan_undistort_trans;
+
+
+}
+
+void LIO::stateEstimationAndMapping()
+{
+    
+    return;
 }
 
 void LIO::run()
@@ -374,7 +395,8 @@ void LIO::run()
         }
         handleFirstFrame();
         ProcessIMU();
-
+        
+        stateEstimationAndMapping();
         
     }
 

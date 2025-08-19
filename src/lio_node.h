@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 08:51:05
+ * @LastEditTime: 2025-08-19 09:17:00
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -40,9 +40,12 @@
 #include "static_imu_init.h"
 #include "utils/math_utils.h"
 #include "utils/point_types.h"
+#include "ndt_inc.h"
+#include <pcl/common/transforms.h>
 
 using namespace cv;
 using namespace std;
+using namespace sad;
 #define IS_VALID( a ) ( ( abs( a ) > 1e8 ) ? true : false )
 #define ANSI_COLOR_BLUE_BOLD "\x1b[1;34m"
 
@@ -68,6 +71,7 @@ struct LidarMeasureGroup
   double last_lio_update_time;
   PointCloudXYZI::Ptr lidar;
   PointCloudXYZI::Ptr pcl_proc_cur;
+  FullPointCloudType::Ptr pcl_proc_cur_ndt;
   PointCloudXYZI::Ptr pcl_proc_next;
   deque<struct MeasureGroup> measures;
 //   EKF_STATE lio_vio_flg;
@@ -98,8 +102,16 @@ private:
 
     SE3 TIL_;  // Lidar与IMU之间外参
     // PointCloudXYZI::Ptr scan_undistort_{new PointCloudXYZI::Ptr()}; // 格式待评估
-
+    // PointCloudXYZI scan_undistort_;
+    FullCloudPtr scan_undistort_;
+    // FullCloudPtr scan_undistort_trans(new FullPointCloudType);
+    /// NDT数据
+    
+    IncNdt3d ndt_;
+    SE3 last_pose_;
+    
     void Undistort();
+    void Align();
 
 public:
     std::mutex mtx_buffer, mtx_buffer_imu_prop;
@@ -138,6 +150,7 @@ public:
     IMUPtr imu2IMU(const sensor_msgs::ImuConstPtr &mg_in);
     void ProcessIMU();
     void TryInitIMU();
+    void stateEstimationAndMapping();
 
     LIO(/* args */);
     ~LIO();
