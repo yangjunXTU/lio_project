@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-19 09:18:37
+ * @LastEditTime: 2025-08-20 07:37:04
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
@@ -40,6 +40,7 @@ LIO::LIO(/* args */)
     pub_depth_img_comp = nh.advertise<sensor_msgs::Image>("/pub_depth_img_comp",1000);
     pub_pcl = nh.advertise<sensor_msgs::PointCloud2>("/mid360/orin",1000);
     pub_pcl_un = nh.advertise<sensor_msgs::PointCloud2>("/mid360/undistort",1000);
+    pub_pcl_ndt = nh.advertise<sensor_msgs::PointCloud2>("/mid360/ndt_clod",1000);
     pub_camera_odom = nh.advertise<nav_msgs::Odometry>("/pub_camera_odom",1000);
     pub_path = nh.advertise<nav_msgs::Path>("/pub_apriltag_path",1000);
 
@@ -126,6 +127,17 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
     pl_full.width = pl_full.size();
     
     *ptr = pl_full;
+    
+    Mid360Handler(msg);
+    FullCloudPtr ptr_ndt(new FullPointCloudType());
+    *ptr_ndt = cloud_out_;
+
+    if (ptr_ndt->empty()) {
+            return;
+        }
+
+    lidar_buffer_ndt.emplace_back(ptr_ndt);
+
     lid_raw_data_buffer.push_back(ptr);
     lid_header_time_buffer.push_back(msg->header.stamp.toSec());
     last_timestamp_lidar = msg->header.stamp.toSec();
@@ -138,6 +150,46 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
     // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
     pub_pcl.publish( output );
     
+}
+
+void LIO::Mid360Handler(const livox_ros_driver2::CustomMsg::ConstPtr &msg) {
+    cloud_out_.clear();
+    cloud_full_.clear();
+    int plsize = msg->point_num;
+
+    cloud_out_.reserve(plsize);
+    cloud_full_.resize(plsize);
+
+    std::vector<bool> is_valid_pt(plsize, false);
+    std::vector<uint> index(plsize - 1);
+    for (uint i = 0; i < plsize - 1; ++i) {
+        index[i] = i + 1;  // 从1开始
+    }
+    // std::execution::par_unseq, 
+    std::for_each(index.begin(), index.end(), [&](const uint &i) {
+        if ((msg->points[i].line < num_scans_) &&
+            ((msg->points[i].tag & 0x30) == 0x10 || (msg->points[i].tag & 0x30) == 0x00)) {
+            if (i % point_filter_num_ == 0) {
+                cloud_full_[i].x = msg->points[i].x;
+                cloud_full_[i].y = msg->points[i].y;
+                cloud_full_[i].z = msg->points[i].z;
+                cloud_full_[i].intensity = msg->points[i].reflectivity;
+                cloud_full_[i].time = msg->points[i].offset_time / float(1000000);
+
+                if ((abs(cloud_full_[i].x - cloud_full_[i - 1].x) > 1e-7) ||
+                    (abs(cloud_full_[i].y - cloud_full_[i - 1].y) > 1e-7) ||
+                    (abs(cloud_full_[i].z - cloud_full_[i - 1].z) > 1e-7)) {
+                    is_valid_pt[i] = true;
+                }
+            }
+        }
+    });
+
+    for (uint i = 1; i < plsize; i++) {
+        if (is_valid_pt[i]) {
+            cloud_out_.points.push_back(cloud_full_[i]);
+        }
+    }
 }
 
 void LIO::imu_cbk(const sensor_msgs::ImuConstPtr &msg_in)
@@ -212,6 +264,7 @@ bool LIO::sync_packages(LidarMeasureGroup &meas)
       meas.lidar_frame_beg_time = lid_header_time_buffer.front();                                                // generate lidar_frame_beg_time
       meas.lidar_frame_end_time = meas.lidar_frame_beg_time + meas.lidar->points.back().curvature / double(1000); // calc lidar scan end time
       meas.pcl_proc_cur = meas.lidar;
+      meas.pcl_proc_cur_ndt = lidar_buffer_ndt.front();
       lidar_pushed = true;                                                                                       // flag
     }
     // TODO: add imu data to meas
@@ -237,6 +290,7 @@ bool LIO::sync_packages(LidarMeasureGroup &meas)
     }
     // 移除激光雷达数据和时间戳
     lid_raw_data_buffer.pop_front();
+    lidar_buffer_ndt.pop_front();
     lid_header_time_buffer.pop_front();
     mtx_buffer.unlock();
 
@@ -321,7 +375,7 @@ void LIO::TryInitIMU()
 void LIO::Undistort()
 {
     // scan_undistort_.clear();
-    auto cloud = LidarMeasures.pcl_proc_cur;
+    auto cloud = LidarMeasures.pcl_proc_cur_ndt;
     auto imu_state = ieskf_.GetNominalState();
     SE3 T_end = SE3(imu_state.R_, imu_state.p_);
 
@@ -329,10 +383,10 @@ void LIO::Undistort()
     std::for_each( cloud->points.begin(), cloud->points.end(),[&](auto &pt){
         SE3 Ti = T_end;
         NavStated match;
-        auto time_p = pt.curvature / double(1000);
+        // auto time_p = pt.curvature / double(1000);
         //* 1e-3
         PoseInterp<NavStated>(
-            LidarMeasures.lidar_frame_beg_time + time_p , imu_states_, [](const NavStated &s) { return s.timestamp_; },
+            LidarMeasures.lidar_frame_beg_time + pt.time * 1e-3 , imu_states_, [](const NavStated &s) { return s.timestamp_; },
             [](const NavStated &s) { return s.GetSE3(); }, Ti, match);
 
         Eigen::Vector3d pi = ToVec3d(pt);
@@ -344,7 +398,7 @@ void LIO::Undistort()
 
     });
 
-    // scan_undistort_ = cloud;
+    scan_undistort_ = cloud;
     // TODO: 需要解决scan_undistort_、cloud数据类型不匹配的问题；
 
     sensor_msgs::PointCloud2 output;
@@ -362,7 +416,60 @@ void LIO::Align()
     FullCloudPtr scan_undistort_trans(new FullPointCloudType);
     pcl::transformPointCloud(*scan_undistort_, *scan_undistort_trans, TIL_.matrix().cast<float>());
     scan_undistort_ = scan_undistort_trans;
+    
+    current_scan_ = ConvertToCloud<FullPointType>(scan_undistort_);
 
+    // voxel 之
+    pcl::VoxelGrid<PointType> voxel;
+    voxel.setLeafSize(0.5, 0.5, 0.5);
+    voxel.setInputCloud(current_scan_);
+
+    CloudPtr current_scan_filter(new PointCloudType);
+    voxel.filter(*current_scan_filter);
+
+    if (flg_first_scan_) {
+        ndt_.AddCloud(current_scan_);
+        flg_first_scan_ = false;
+
+        return;
+    }
+
+    // 后续的scan，使用NDT配合pose进行更新
+    LOG(INFO) << "=== frame " << frame_num_;
+
+    ndt_.SetSource(current_scan_filter);
+    ieskf_.UpdateUsingCustomObserve([this](const SE3 &input_pose, Mat18d &HTVH, Vec18d &HTVr) {
+        ndt_.ComputeResidualAndJacobians(input_pose, HTVH, HTVr);
+    });
+
+    auto current_nav_state = ieskf_.GetNominalState();
+
+    // 若运动了一定范围，则把点云放入地图中
+    SE3 current_pose = ieskf_.GetNominalSE3();
+    SE3 delta_pose = last_pose_.inverse() * current_pose;
+
+    CloudPtr current_scan_world(new PointCloudType);
+    pcl::transformPointCloud(*current_scan_filter, *current_scan_world, current_pose.matrix());
+
+    if (delta_pose.translation().norm() > 1.0 || delta_pose.so3().log().norm() > deg2rad(10.0)) {
+        // 将地图合入NDT中
+        
+        ndt_.AddCloud(current_scan_world);
+        last_pose_ = current_pose;
+    }
+
+    // pcl::transformPointCloud(*current_scan_filter, *current_scan_w, current_pose.matrix());
+
+    sensor_msgs::PointCloud2 output;
+    pcl::toROSMsg( *current_scan_world, output );
+    output.header.frame_id = "map";
+    // output.header.stamp = ros::Time::fromSec(LidarMeasures.lidar_frame_end_time);
+    
+    // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
+    pub_pcl_ndt.publish( output );
+
+    frame_num_++;
+    return;
 
 }
 
@@ -396,7 +503,7 @@ void LIO::run()
         handleFirstFrame();
         ProcessIMU();
         
-        stateEstimationAndMapping();
+        // stateEstimationAndMapping();
         
     }
 
