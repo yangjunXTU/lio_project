@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-20 07:37:04
+ * @LastEditTime: 2025-08-20 12:27:33
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
@@ -347,10 +347,10 @@ void LIO::ProcessIMU()
     }
     ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
 
-    // lildar undistort
-    Undistort();
+    // // lildar undistort
+    // Undistort();
 
-    Align();
+    // Align();
 }
 
 void LIO::TryInitIMU()
@@ -413,6 +413,7 @@ void LIO::Undistort()
 
 void LIO::Align()
 {
+    if (scan_undistort_->empty()) return;
     FullCloudPtr scan_undistort_trans(new FullPointCloudType);
     pcl::transformPointCloud(*scan_undistort_, *scan_undistort_trans, TIL_.matrix().cast<float>());
     scan_undistort_ = scan_undistort_trans;
@@ -449,7 +450,11 @@ void LIO::Align()
     SE3 delta_pose = last_pose_.inverse() * current_pose;
 
     CloudPtr current_scan_world(new PointCloudType);
+    // pcl::PointCloud<pcl::PointXYZINormal>::Ptr current_scan_world{new pcl::PointXYZINormal};
     pcl::transformPointCloud(*current_scan_filter, *current_scan_world, current_pose.matrix());
+
+    *pcl_wait_save += *current_scan_world;
+    pcl::concatenate(*pcl_wait_save, *current_scan_world, *pcl_wait_save);
 
     if (delta_pose.translation().norm() > 1.0 || delta_pose.so3().log().norm() > deg2rad(10.0)) {
         // 将地图合入NDT中
@@ -457,7 +462,8 @@ void LIO::Align()
         ndt_.AddCloud(current_scan_world);
         last_pose_ = current_pose;
     }
-
+    
+    
     // pcl::transformPointCloud(*current_scan_filter, *current_scan_w, current_pose.matrix());
 
     sensor_msgs::PointCloud2 output;
@@ -473,10 +479,28 @@ void LIO::Align()
 
 }
 
-void LIO::stateEstimationAndMapping()
+void LIO::ProcessLidar()
 {
-    
+    // lildar undistort
+    Undistort();
+
+    Align();
     return;
+}
+
+void LIO::savePCD()
+{
+    if (pcl_wait_save->empty()) return;
+    pcl::PCDWriter pcd_writer;
+    std::string raw_points_dir = "/home/yangj/Robot/code/lio_project_wk/src/lio_project/Log/PCD/all_raw_points.pcd";
+    
+    if (pcl_wait_save->size() > 0)
+    {
+        pcd_writer.writeBinary(raw_points_dir, *pcl_wait_save);
+        ROS_INFO("Raw point cloud data saved to: %s, with point count: %ld" ,
+            raw_points_dir.c_str() , pcl_wait_save->points.size() );
+    }
+    
 }
 
 void LIO::run()
@@ -503,9 +527,11 @@ void LIO::run()
         handleFirstFrame();
         ProcessIMU();
         
-        // stateEstimationAndMapping();
+        ProcessLidar();
         
     }
-
+    savePCD();
     ros::spin();
+
+    
 }

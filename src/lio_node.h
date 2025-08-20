@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-20 07:32:19
+ * @LastEditTime: 2025-08-20 12:26:30
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -106,12 +106,15 @@ private:
     // PointCloudXYZI scan_undistort_;
     FullCloudPtr scan_undistort_;
     FullPointCloudType cloud_full_, cloud_out_;  // 输出点云
+    
     int num_scans_ = 4;                          // 扫描线数mid360
     int point_filter_num_ = 1;                   // 跳点
     // FullCloudPtr scan_undistort_trans(new FullPointCloudType);
     /// NDT数据
     CloudPtr current_scan_ = nullptr;
     CloudPtr current_scan_w = nullptr;
+    CloudPtr pcl_wait_save{new PointCloudType};
+    // pcl::PointCloud<pcl::PointXYZINormal>::Ptr pcl_wait_save{new pcl::PointXYZINormal};
     bool flg_first_scan_ = true;
     int frame_num_ = 0;
     
@@ -161,7 +164,8 @@ public:
     IMUPtr imu2IMU(const sensor_msgs::ImuConstPtr &mg_in);
     void ProcessIMU();
     void TryInitIMU();
-    void stateEstimationAndMapping();
+    void ProcessLidar();
+    void savePCD();
 
     LIO(/* args */);
     ~LIO();
