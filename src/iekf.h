@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-13 02:24:16
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 00:54:55
+ * @LastEditTime: 2025-08-20 07:01:16
  * @FilePath: /lio_project_wk/src/lio_project/src/iekf.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -11,14 +11,15 @@
  #include"utils/eigen_types.h"
  #include"utils/nav_state.h"
  #include"utils/imu.h"
+ #include"utils/math_utils.h"
  
 #ifndef H_IEKF_LIO_HPP
 #define H_IEKF_LIO_HPP
 
 // 常量定义
-constexpr double kDEG2RAD = M_PI / 180.0;  // deg->rad
-constexpr double kRAD2DEG = 180.0 / M_PI;  // rad -> deg
-constexpr double G_m_s2 = 9.81;            // 重力大小
+// constexpr double kDEG2RAD = M_PI / 180.0;  // deg->rad
+// constexpr double kRAD2DEG = 180.0 / M_PI;  // rad -> deg
+// constexpr double G_m_s2 = 9.81;            // 重力大小
 
 template <typename S>
 class IESKF
@@ -86,6 +87,30 @@ class IESKF
         // ~IESKF();
         bool Predict(const IMU& imu);
 
+        using CustomObsFunc = std::function<void(const SE3& input_pose, Eigen::Matrix<S, 18, 18>& HT_Vinv_H,
+                                             Eigen::Matrix<S, 18, 1>& HT_Vinv_r)>;
+
+        /// 使用自定义观测函数更新滤波器
+        bool UpdateUsingCustomObserve(CustomObsFunc obs);
+
+        /// 全量状态
+        // NavStateT GetNominalState() const { return NavStateT(current_time_, R_, p_, v_, bg_, ba_); }
+
+        /// SE3 状态
+        SE3 GetNominalSE3() const { return SE3(R_, p_); }
+
+        void SetX(const NavStated& x) {
+            current_time_ = x.timestamp_;
+            R_ = x.R_;
+            p_ = x.p_;
+            v_ = x.v_;
+            bg_ = x.bg_;
+            ba_ = x.ba_;
+        }
+
+        void SetCov(const Mat18T& cov) { cov_ = cov; }
+        Vec3d GetGravity() const { return g_; }
+
     private:
 
         void BuildNoise(const Options& options) {
@@ -106,6 +131,22 @@ class IESKF
             // double gh2 = options.gnss_height_noise_ * options.gnss_height_noise_;
             // double ga2 = options.gnss_ang_noise_ * options.gnss_ang_noise_;
             // gnss_noise_.diagonal() << gp2, gp2, gh2, ga2, ga2, ga2;
+        }
+
+        /// 更新名义状态变量
+        void Update() {
+            p_ += dx_.template block<3, 1>(0, 0);
+            v_ += dx_.template block<3, 1>(3, 0);
+            R_ = R_ * SO3::exp(dx_.template block<3, 1>(6, 0));
+
+            if (options_.update_bias_gyro_) {
+                bg_ += dx_.template block<3, 1>(9, 0);
+            }
+
+            if (options_.update_bias_acce_) {
+                ba_ += dx_.template block<3, 1>(12, 0);
+            }
+            g_ += dx_.template block<3, 1>(15, 0);
         }
 
         double current_time_ = 0.0;
@@ -173,6 +214,49 @@ bool IESKF<S>::Predict(const IMU& imu){
 
 // }
 
+template <typename S>
+bool IESKF<S>::UpdateUsingCustomObserve(IESKF::CustomObsFunc obs) {
+    // H阵由用户给定
 
+    SO3 start_R = R_;
+    Eigen::Matrix<S, 18, 1> HTVr;
+    Eigen::Matrix<S, 18, 18> HTVH;
+    Eigen::Matrix<S, 18, Eigen::Dynamic> K;
+    Mat18T Pk, Qk;
+
+    for (int iter = 0; iter < options_.num_iterations_; ++iter) {
+        // 调用obs function
+        obs(GetNominalSE3(), HTVH, HTVr);
+
+        // 投影P
+        Mat18T J = Mat18T::Identity();
+        J.template block<3, 3>(6, 6) = Mat3T::Identity() - 0.5 * SO3::hat((R_.inverse() * start_R).log());
+        Pk = J * cov_ * J.transpose();
+
+        // 卡尔曼更新
+        Qk = (Pk.inverse() + HTVH).inverse();  // 这个记作中间变量，最后更新时可以用
+        dx_ = Qk * HTVr;
+        // LOG(INFO) << "iter " << iter << " dx = " << dx_.transpose() << ", dxn: " << dx_.norm();
+
+        // dx合入名义变量
+        Update();
+
+        if (dx_.norm() < options_.quit_eps_) {
+            break;
+        }
+    }
+
+    // update P
+    cov_ = (Mat18T::Identity() - Qk * HTVH) * Pk;
+
+    // project P
+    Mat18T J = Mat18T::Identity();
+    Vec3d dtheta = (R_.inverse() * start_R).log();
+    J.template block<3, 3>(6, 6) = Mat3T::Identity() - 0.5 * SO3::hat(dtheta);
+    cov_ = J * cov_ * J.inverse();
+
+    dx_.setZero();
+    return true;
+}
 
 #endif

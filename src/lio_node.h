@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 03:24:08
+ * @LastEditTime: 2025-08-20 07:32:19
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -25,6 +25,7 @@
 #include<sensor_msgs/Image.h>
 #include<boost/bind.hpp>
 #include<functional>
+#include <execution>
 
 #include<geometry_msgs/PoseWithCovariance.h>
 #include<geometry_msgs/Quaternion.h>
@@ -37,9 +38,15 @@
 #include "iekf.h"
 #include "utils/eigen_types.h"
 #include "static_imu_init.h"
+#include "utils/math_utils.h"
+#include "utils/point_types.h"
+#include "ndt_inc.h"
+#include <pcl/common/transforms.h>
+#include "utils/lidar_utils.h"
 
 using namespace cv;
 using namespace std;
+using namespace sad;
 #define IS_VALID( a ) ( ( abs( a ) > 1e8 ) ? true : false )
 #define ANSI_COLOR_BLUE_BOLD "\x1b[1;34m"
 
@@ -65,6 +72,7 @@ struct LidarMeasureGroup
   double last_lio_update_time;
   PointCloudXYZI::Ptr lidar;
   PointCloudXYZI::Ptr pcl_proc_cur;
+  FullPointCloudType::Ptr pcl_proc_cur_ndt;
   PointCloudXYZI::Ptr pcl_proc_next;
   deque<struct MeasureGroup> measures;
 //   EKF_STATE lio_vio_flg;
@@ -93,9 +101,32 @@ private:
     std::vector<NavStated> imu_states_;
     StaticIMUInit imu_init_;
 
+    SE3 TIL_;  // Lidar与IMU之间外参
+    // PointCloudXYZI::Ptr scan_undistort_{new PointCloudXYZI::Ptr()}; // 格式待评估
+    // PointCloudXYZI scan_undistort_;
+    FullCloudPtr scan_undistort_;
+    FullPointCloudType cloud_full_, cloud_out_;  // 输出点云
+    int num_scans_ = 4;                          // 扫描线数mid360
+    int point_filter_num_ = 1;                   // 跳点
+    // FullCloudPtr scan_undistort_trans(new FullPointCloudType);
+    /// NDT数据
+    CloudPtr current_scan_ = nullptr;
+    CloudPtr current_scan_w = nullptr;
+    bool flg_first_scan_ = true;
+    int frame_num_ = 0;
+    
+    IncNdt3d ndt_;
+    SE3 last_pose_;
+    
+    
+    void Undistort();
+    void Align();
+    void Mid360Handler(const livox_ros_driver2::CustomMsg::ConstPtr &msg);
+
 public:
     std::mutex mtx_buffer, mtx_buffer_imu_prop;
     deque<PointCloudXYZI::Ptr> lid_raw_data_buffer;
+    std::deque<FullCloudPtr> lidar_buffer_ndt;
     deque<double> lid_header_time_buffer;
     deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
     double last_timestamp_lidar = -1.0, last_timestamp_imu = -1.0;
@@ -109,7 +140,7 @@ public:
     ros::NodeHandle nh;
     ros::Subscriber sub_depth_img_compLz4,sub_depth_img_comp, sub_img_comp, sub_pcl, sub_imu,sub_depth_img, sub_img,sub_camera_odom,sub_apriltag;
     ros::Publisher pub_depth_img_comp, pub_img_comp,pub_depth_img, pub_img,pub_img_comp_info;
-    ros::Publisher pub_pcl,pub_camera_odom,pub_path;
+    ros::Publisher pub_pcl,pub_pcl_un,pub_pcl_ndt,pub_camera_odom,pub_path;
     nav_msgs::Path path;
 
     double  img_rec_time;
@@ -130,6 +161,7 @@ public:
     IMUPtr imu2IMU(const sensor_msgs::ImuConstPtr &mg_in);
     void ProcessIMU();
     void TryInitIMU();
+    void stateEstimationAndMapping();
 
     LIO(/* args */);
     ~LIO();

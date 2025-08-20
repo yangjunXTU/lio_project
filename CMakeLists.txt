@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(lio_project)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++14)
+add_compile_options(-std=c++17)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -31,6 +31,7 @@ find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Sophus REQUIRED)
 find_package(Boost REQUIRED COMPONENTS thread)
+find_package(glog REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -122,7 +123,7 @@ catkin_package(
 #  LIBRARIES msg_vis
   CATKIN_DEPENDS cv_bridge message_generation nav_msgs roscpp roslz4 rospy std_msgs geometry_msgs message_runtime image_transport
 #  DEPENDS system_lib
-  DEPENDS EIGEN3 PCL OpenCV Sophus
+  DEPENDS EIGEN3 PCL OpenCV Sophus glog
 )
 
 ###########
@@ -155,7 +156,7 @@ message(${OpenCV_INCLUDE_DIRS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/main.cpp src/lio_node.cpp src/static_imu_init.cpp)
+add_executable(${PROJECT_NAME}_node src/main.cpp src/lio_node.cpp src/static_imu_init.cpp src/ndt_inc.cpp include/timer/timer.cc)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -176,6 +177,7 @@ target_link_libraries(${PROJECT_NAME}_node
   ${PCL_LIBRARIES}
   ${OpenCV_LIBRARIES}
   ${Sophus_LIBRARIES}
+  glog::glog
 )
 
 #############

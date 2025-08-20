@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-15 02:52:53
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-15 06:06:30
+ * @LastEditTime: 2025-08-15 07:25:52
  * @FilePath: /lio_project_wk/src/lio_project/src/static_imu_init.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -19,6 +19,7 @@
 #include <numeric>
 #include <ros/ros.h>
 #include<iostream>
+#include"utils/math_utils.h"
 
 
 /**
@@ -79,22 +80,22 @@ class StaticIMUInit {
 
 #endif  // SLAM_IN_AUTO_DRIVING_STATIC_IMU_INIT_H
 
-/**
- * 计算一个容器内数据的均值与对角形式协方差
- * @tparam C    容器类型
- * @tparam D    结果类型
- * @tparam Getter   获取数据函数, 接收一个容器内数据类型，返回一个D类型
- */
-template <typename C, typename D, typename Getter>
-void ComputeMeanAndCovDiag(const C& data, D& mean, D& cov_diag, Getter&& getter) {
-    size_t len = data.size();
-    assert(len > 1);
-    // clang-format off
-    mean = std::accumulate(data.begin(), data.end(), D::Zero().eval(),
-                           [&getter](const D& sum, const auto& data) -> D { return sum + getter(data); }) / len;
-    cov_diag = std::accumulate(data.begin(), data.end(), D::Zero().eval(),
-                               [&mean, &getter](const D& sum, const auto& data) -> D {
-                                   return sum + (getter(data) - mean).cwiseAbs2().eval();
-                               }) / (len - 1);
-    // clang-format on
-}
+// /**
+//  * 计算一个容器内数据的均值与对角形式协方差
+//  * @tparam C    容器类型
+//  * @tparam D    结果类型
+//  * @tparam Getter   获取数据函数, 接收一个容器内数据类型，返回一个D类型
+//  */
+// template <typename C, typename D, typename Getter>
+// void ComputeMeanAndCovDiag(const C& data, D& mean, D& cov_diag, Getter&& getter) {
+//     size_t len = data.size();
+//     assert(len > 1);
+//     // clang-format off
+//     mean = std::accumulate(data.begin(), data.end(), D::Zero().eval(),
+//                            [&getter](const D& sum, const auto& data) -> D { return sum + getter(data); }) / len;
+//     cov_diag = std::accumulate(data.begin(), data.end(), D::Zero().eval(),
+//                                [&mean, &getter](const D& sum, const auto& data) -> D {
+//                                    return sum + (getter(data) - mean).cwiseAbs2().eval();
+//                                }) / (len - 1);
+//     // clang-format on
+// }
