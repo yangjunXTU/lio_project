@@ -55,8 +55,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 3.1102588176727295
-        Min Value: -0.32467925548553467
+        Max Value: 3.1373021602630615
+        Min Value: -0.8680458664894104
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -277,7 +277,7 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 255; 32; 99
+      Color: 15; 255; 143
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
@@ -290,8 +290,8 @@ Visualization Manager:
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.03999999910593033
-      Style: Flat Squares
-      Topic: /mid360/ndt_clod
+      Style: Boxes
+      Topic: /mid360/undistort
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -324,7 +324,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 23.09314727783203
+      Distance: 31.872203826904297
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -332,17 +332,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 5.736478805541992
-        Y: -6.366806507110596
-        Z: -2.820770025253296
+        X: 8.03994369506836
+        Y: 6.020419120788574
+        Z: -2.2321622371673584
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.22479748725891113
+      Pitch: 0.7097973823547363
       Target Frame: <Fixed Frame>
-      Yaw: 0.9625622630119324
+      Yaw: 5.407115459442139
     Saved: ~
 Window Geometry:
   Displays:
@@ -363,4 +363,4 @@ Window Geometry:
     collapsed: false
   Width: 2457
   X: 280
-  Y: 297
+  Y: 223

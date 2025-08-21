@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-20 12:27:33
+ * @LastEditTime: 2025-08-21 00:24:16
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
@@ -401,13 +401,13 @@ void LIO::Undistort()
     scan_undistort_ = cloud;
     // TODO: 需要解决scan_undistort_、cloud数据类型不匹配的问题；
 
-    sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg( *cloud, output );
-    output.header.frame_id = "map";
-    // output.header.stamp = ros::Time::fromSec(LidarMeasures.lidar_frame_end_time);
+    // sensor_msgs::PointCloud2 output;
+    // pcl::toROSMsg( *cloud, output );
+    // output.header.frame_id = "map";
+    // // output.header.stamp = ros::Time::fromSec(LidarMeasures.lidar_frame_end_time);
     
-    // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
-    pub_pcl_un.publish( output );
+    // // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
+    // pub_pcl_un.publish( output );
 
 }
 
@@ -452,9 +452,18 @@ void LIO::Align()
     CloudPtr current_scan_world(new PointCloudType);
     // pcl::PointCloud<pcl::PointXYZINormal>::Ptr current_scan_world{new pcl::PointXYZINormal};
     pcl::transformPointCloud(*current_scan_filter, *current_scan_world, current_pose.matrix());
+    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_, current_pose.matrix());
+
+    sensor_msgs::PointCloud2 output1;
+    pcl::toROSMsg( *scan_undistort_, output1 );
+    output1.header.frame_id = "map";
+    // output.header.stamp = ros::Time::fromSec(LidarMeasures.lidar_frame_end_time);
+    
+    // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
+    pub_pcl_un.publish( output1 );
 
     *pcl_wait_save += *current_scan_world;
-    pcl::concatenate(*pcl_wait_save, *current_scan_world, *pcl_wait_save);
+    // pcl::concatenate(*pcl_wait_save, *current_scan_world, *pcl_wait_save);
 
     if (delta_pose.translation().norm() > 1.0 || delta_pose.so3().log().norm() > deg2rad(10.0)) {
         // 将地图合入NDT中
