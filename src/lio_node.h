@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-20 12:26:30
+ * @LastEditTime: 2025-08-22 07:53:33
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -43,6 +43,7 @@
 #include "ndt_inc.h"
 #include <pcl/common/transforms.h>
 #include "utils/lidar_utils.h"
+#include <tf/transform_broadcaster.h>
 
 using namespace cv;
 using namespace std;
@@ -144,7 +145,8 @@ public:
     ros::Subscriber sub_depth_img_compLz4,sub_depth_img_comp, sub_img_comp, sub_pcl, sub_imu,sub_depth_img, sub_img,sub_camera_odom,sub_apriltag;
     ros::Publisher pub_depth_img_comp, pub_img_comp,pub_depth_img, pub_img,pub_img_comp_info;
     ros::Publisher pub_pcl,pub_pcl_un,pub_pcl_ndt,pub_camera_odom,pub_path;
-    nav_msgs::Path path;
+    ros::Publisher pubOdomAftMapped,pubPath,mavros_pose_publisher;
+    // nav_msgs::Path path;
 
     double  img_rec_time;
     cv::Mat image_get;
@@ -154,6 +156,11 @@ public:
     pcl::PointCloud<pcl::PointXYZI> output_cloud;
 
     LidarMeasureGroup LidarMeasures;
+
+    nav_msgs::Path path;
+    nav_msgs::Odometry odomAftMapped;
+    geometry_msgs::Quaternion geoQuat;
+    geometry_msgs::PoseStamped msg_body_pose;
 
     void image_callback( const sensor_msgs::ImageConstPtr &msg );
     void feat_points_cbk( const livox_ros_driver2::CustomMsg::ConstPtr &msg  );
@@ -166,6 +173,10 @@ public:
     void TryInitIMU();
     void ProcessLidar();
     void savePCD();
+    void publish_odometry(const ros::Publisher &pubOdomAftMapped);
+    template <typename T> void set_posestamp(T &out);
+    void publish_path(const ros::Publisher pubPath);
+    void publish_mavros(const ros::Publisher &mavros_pose_publisher);
 
     LIO(/* args */);
     ~LIO();

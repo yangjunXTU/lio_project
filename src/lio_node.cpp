@@ -3,11 +3,12 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-21 00:24:16
+ * @LastEditTime: 2025-08-22 08:08:35
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
 #include <execution>
+
 
 
 LIO::LIO(/* args */)
@@ -43,6 +44,9 @@ LIO::LIO(/* args */)
     pub_pcl_ndt = nh.advertise<sensor_msgs::PointCloud2>("/mid360/ndt_clod",1000);
     pub_camera_odom = nh.advertise<nav_msgs::Odometry>("/pub_camera_odom",1000);
     pub_path = nh.advertise<nav_msgs::Path>("/pub_apriltag_path",1000);
+    pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_map", 10);
+    pubPath = nh.advertise<nav_msgs::Path>("/path", 10);
+    mavros_pose_publisher = nh.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 10);
 
     std::vector<double> ext_t = {-0.011, -0.02329, 0.04412};
     std::vector<double> ext_r ={1, 0, 0, 0, 1, 0, 0, 0, 1};
@@ -50,6 +54,8 @@ LIO::LIO(/* args */)
     Eigen::Vector3d lidar_T_wrt_IMU = VecFromArray(ext_t);
     Eigen::Matrix3d lidar_R_wrt_IMU = MatFromArray(ext_r);
     TIL_ = SE3(lidar_R_wrt_IMU, lidar_T_wrt_IMU);
+    path.header.stamp = ros::Time::now();
+    path.header.frame_id = "map";
 }
 
 
@@ -472,7 +478,9 @@ void LIO::Align()
         last_pose_ = current_pose;
     }
     
-    
+    publish_odometry(pubOdomAftMapped);
+    publish_path(pubPath);
+    publish_mavros(mavros_pose_publisher);
     // pcl::transformPointCloud(*current_scan_filter, *current_scan_w, current_pose.matrix());
 
     sensor_msgs::PointCloud2 output;
@@ -510,6 +518,65 @@ void LIO::savePCD()
             raw_points_dir.c_str() , pcl_wait_save->points.size() );
     }
     
+}
+
+void LIO::publish_odometry(const ros::Publisher &pubOdomAftMapped)
+{
+
+    odomAftMapped.header.frame_id = "map";
+    odomAftMapped.child_frame_id = "aft_mapped";
+    odomAftMapped.header.stamp = ros::Time::now(); //.ros::Time()fromSec(last_timestamp_lidar);
+    set_posestamp(odomAftMapped.pose.pose);
+
+    static tf::TransformBroadcaster br;
+    tf::Transform transform;
+    tf::Quaternion q;
+    transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x, 
+                                    odomAftMapped.pose.pose.position.y, 
+                                    odomAftMapped.pose.pose.position.z));
+    q.setW(odomAftMapped.pose.pose.orientation.w);
+    q.setX(odomAftMapped.pose.pose.orientation.x);
+    q.setY(odomAftMapped.pose.pose.orientation.y);
+    q.setZ(odomAftMapped.pose.pose.orientation.z);
+    transform.setRotation(q);
+    br.sendTransform( tf::StampedTransform(transform, odomAftMapped.header.stamp, "map", "aft_mapped") );
+    pubOdomAftMapped.publish(odomAftMapped);
+
+}
+
+template <typename T> void LIO::set_posestamp(T &out)
+{
+    SE3 current_pose = ieskf_.GetNominalSE3();
+    Eigen::Vector3d position = current_pose.matrix().block<3,1>(0,3);
+    out.position.x = position.x();
+    out.position.y = position.y();
+    out.position.z = position.z();
+
+    Eigen::Matrix3d rotation_matrix = current_pose.matrix().block<3,3>(0,0);
+    Eigen::Quaterniond quaternion(rotation_matrix);
+    quaternion.normalize();  // 规范化四元数（确保是单位四元数）
+
+    out.orientation.x = quaternion.x();
+    out.orientation.y = quaternion.y();
+    out.orientation.z = quaternion.y();
+    out.orientation.w = quaternion.w();
+}
+
+void LIO::publish_path(const ros::Publisher pubPath)
+{
+  set_posestamp(msg_body_pose.pose);
+  msg_body_pose.header.stamp = ros::Time::now();
+  msg_body_pose.header.frame_id = "/map";
+  path.poses.push_back(msg_body_pose);
+  pubPath.publish(path);
+}
+
+void LIO::publish_mavros(const ros::Publisher &mavros_pose_publisher)
+{
+  msg_body_pose.header.stamp = ros::Time::now();
+  msg_body_pose.header.frame_id = "/map";
+  set_posestamp(msg_body_pose.pose);
+  mavros_pose_publisher.publish(msg_body_pose);
 }
 
 void LIO::run()
