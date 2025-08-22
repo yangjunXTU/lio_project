@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-22 08:08:35
+ * @LastEditTime: 2025-08-22 08:54:56
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
@@ -514,8 +514,9 @@ void LIO::savePCD()
     if (pcl_wait_save->size() > 0)
     {
         pcd_writer.writeBinary(raw_points_dir, *pcl_wait_save);
-        ROS_INFO("Raw point cloud data saved to: %s, with point count: %ld" ,
-            raw_points_dir.c_str() , pcl_wait_save->points.size() );
+        // ROS_INFO("Raw point cloud data saved to: %s, with point count: %ld" ,
+        //     raw_points_dir.c_str() , pcl_wait_save->points.size() );
+        std::cout << "Raw point cloud data saved to: " << raw_points_dir << ", with point count: " << pcl_wait_save->points.size() << std::endl;
     }
     
 }
