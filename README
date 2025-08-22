@@ -1,4 +1,8 @@
-逐步实现IMU预积分、特征特区、特征匹配、lio里程计、紧耦合融合slam
+个人学习练习项目，逐步实现IMU预积分、特征特区、特征匹配、lio里程计、紧耦合融合slam
+
+参考资料：
+1、FAST-LVIO2：https://github.com/hku-mars/FAST-LIVO2；
+2、SLAM in Autonomous Driving Book (SAD Book)：https://github.com/gaoxiang12/slam_in_autonomous_driving；
 
 一、已完成功能：
 1、框架搭建；
