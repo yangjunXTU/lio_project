@@ -218,7 +218,95 @@ bool IncNdt3d::AlignNdt(SE3& init_pose) {
     return true;
 }
 
+// void IncNdt3d::ComputeResidualAndJacobians(const SE3& input_pose, Mat18d& HTVH, Vec18d& HTVr) {
+//     assert(grids_.empty() == false);
+//     SE3 pose = input_pose;
+
+//     // 大部分流程和前面的Align是一样的，只是会把z, H, R三者抛出去而非自己处理
+//     int num_residual_per_point = 1;
+//     if (options_.nearby_type_ == NearbyType::NEARBY6) {
+//         num_residual_per_point = 7;
+//     }
+
+//     std::vector<int> index(source_->points.size());
+//     for (int i = 0; i < index.size(); ++i) {
+//         index[i] = i;
+//     }
+
+//     int total_size = index.size() * num_residual_per_point;
+
+//     std::vector<bool> effect_pts(total_size, false);
+//     std::vector<Eigen::Matrix<double, 3, 18>> jacobians(total_size);
+//     std::vector<Vec3d> errors(total_size);
+//     std::vector<Mat3d> infos(total_size);
+
+//     // gauss-newton 迭代
+//     // 最近邻，可以并发 std::execution::par_unseq, 
+//     std::for_each(index.begin(), index.end(), [&](int idx) {
+//         auto q = ToVec3d(source_->points[idx]);
+//         Vec3d qs = pose * q;  // 转换之后的q
+
+//         // 计算qs所在的栅格以及它的最近邻栅格
+//         Vec3i key = CastToInt(Vec3d(qs * options_.inv_voxel_size_));
+
+//         for (int i = 0; i < nearby_grids_.size(); ++i) {
+//             Vec3i real_key = key + nearby_grids_[i];
+//             auto it = grids_.find(real_key);
+//             int real_idx = idx * num_residual_per_point + i;
+//             /// 这里要检查高斯分布是否已经估计
+//             if (it != grids_.end() && it->second->second.ndt_estimated_) {
+//                 auto& v = it->second->second;  // voxel
+//                 Vec3d e = qs - v.mu_;
+
+//                 // check chi2 th
+//                 double res = e.transpose() * v.info_ * e;
+//                 if (std::isnan(res) || res > options_.res_outlier_th_) {
+//                     effect_pts[real_idx] = false;
+//                     continue;
+//                 }
+
+//                 // build residual
+//                 Eigen::Matrix<double, 3, 18> J;
+//                 J.setZero();
+//                 J.block<3, 3>(0, 0) = Mat3d::Identity();                   // 对p
+//                 J.block<3, 3>(0, 6) = -pose.so3().matrix() * SO3::hat(q);  // 对R
+
+//                 jacobians[real_idx] = J;
+//                 errors[real_idx] = e;
+//                 infos[real_idx] = v.info_;
+//                 effect_pts[real_idx] = true;
+//             } else {
+//                 effect_pts[real_idx] = false;
+//             }
+//         }
+//     });
+
+//     // 累加Hessian和error,计算dx
+//     double total_res = 0;
+//     int effective_num = 0;
+
+//     HTVH.setZero();
+//     HTVr.setZero();
+
+//     const double info_ratio = 0.01;  // 每个点反馈的info因子
+
+//     for (int idx = 0; idx < effect_pts.size(); ++idx) {
+//         if (!effect_pts[idx]) {
+//             continue;
+//         }
+
+//         total_res += errors[idx].transpose() * infos[idx] * errors[idx];
+//         effective_num++;
+
+//         HTVH += jacobians[idx].transpose() * infos[idx] * jacobians[idx] * info_ratio;
+//         HTVr += -jacobians[idx].transpose() * infos[idx] * errors[idx] * info_ratio;
+//     }
+
+//     LOG(INFO) << "effective: " << effective_num;
+// }
+
 void IncNdt3d::ComputeResidualAndJacobians(const SE3& input_pose, Mat18d& HTVH, Vec18d& HTVr) {
+
     assert(grids_.empty() == false);
     SE3 pose = input_pose;
 
@@ -241,7 +329,9 @@ void IncNdt3d::ComputeResidualAndJacobians(const SE3& input_pose, Mat18d& HTVH, 
     std::vector<Mat3d> infos(total_size);
 
     // gauss-newton 迭代
-    // 最近邻，可以并发 std::execution::par_unseq, 
+    // 最近邻，可以并发
+    auto time1 = std::chrono::high_resolution_clock::now(); 
+    //std::execution::par_unseq,
     std::for_each(index.begin(), index.end(), [&](int idx) {
         auto q = ToVec3d(source_->points[idx]);
         Vec3d qs = pose * q;  // 转换之后的q
@@ -280,6 +370,7 @@ void IncNdt3d::ComputeResidualAndJacobians(const SE3& input_pose, Mat18d& HTVH, 
             }
         }
     });
+    auto time2 = std::chrono::high_resolution_clock::now(); 
 
     // 累加Hessian和error,计算dx
     double total_res = 0;
@@ -302,7 +393,15 @@ void IncNdt3d::ComputeResidualAndJacobians(const SE3& input_pose, Mat18d& HTVH, 
         HTVr += -jacobians[idx].transpose() * infos[idx] * errors[idx] * info_ratio;
     }
 
-    LOG(INFO) << "effective: " << effective_num;
+    auto time3 = std::chrono::high_resolution_clock::now(); 
+    
+    std::chrono::duration<double> duration_time = time2 - time1;
+    double duration_time_seconds = duration_time.count(); 
+    std::chrono::duration<double> duration_time2 = time3 - time2;
+    double duration_time_seconds2 = duration_time2.count(); 
+    LOG(INFO) << "effective: " << effective_num << " time_J: "<<duration_time_seconds <<" sum_J: "<<duration_time_seconds2;
+    
+
 }
 
 // void IncNdt3d::BuildNDTEdges(sad::VertexPose* v, std::vector<EdgeNDT*>& edges) {

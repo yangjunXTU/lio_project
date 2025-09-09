@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-25 01:54:38
+ * @LastEditTime: 2025-09-08 06:23:41
  */
 #include"lio_node.h"
 #include"utils/eigen_types.h"
@@ -83,6 +83,8 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
     {
         ROS_ERROR("lidar loop back, clear buffer");
         lid_raw_data_buffer.clear();
+        lidar_buffer_ndt.clear();
+        
     }
 
     uint plsize = msg->point_num;
@@ -265,6 +267,8 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg )
 bool LIO::sync_packages(LidarMeasureGroup &meas)
 {
     if (lid_raw_data_buffer.empty()) return false;
+    
+    if (lidar_buffer_ndt.empty()) return false;
     if (imu_buffer.empty()) return false;
 
     if (!lidar_pushed)
@@ -589,8 +593,7 @@ void LIO::publish_mavros(const ros::Publisher &mavros_pose_publisher)
 
 void LIO::run()
 {
-    // This function can be used to start the processing loop if needed
-    // For now, it is empty as the callbacks will handle the data processing
+
     ros::Rate rate(30); // 30 Hz
     while (ros::ok())
     {
@@ -598,13 +601,6 @@ void LIO::run()
         ros::spinOnce();
         if (!sync_packages(LidarMeasures))  
         {   
-            // ROS_INFO("--------------------------------------------");
-            // // std::cout <<"imu: " << LidarMeasures.measures.back().imu.back()->header.stamp.toSec() << std::endl;
-            // ROS_INFO("[LidarMeasures] LidarMeasures measures.size: %ld",LidarMeasures.measures.size());
-            // ROS_INFO("[LidarMeasures] LidarMeasures lidar_frame_end_time: %.6f",LidarMeasures.lidar_frame_end_time);
-            // std::cout << LidarMeasures.measures.front().imu2.back()->timestamp_ << std::endl;
-            // ROS_INFO("[LidarMeasures] LidarMeasures imu lio time: %.6f",LidarMeasures.measures.front().lio_time);
-            // LidarMeasures.measures.pop_front();
             rate.sleep();
             continue;
         }
