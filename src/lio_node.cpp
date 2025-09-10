@@ -174,7 +174,7 @@ void LIO::Mid360Handler(const livox_ros_driver2::CustomMsg::ConstPtr &msg) {
         index[i] = i + 1;  // 从1开始
     }
     // std::execution::par_unseq, 
-    std::for_each(index.begin(), index.end(), [&](const uint &i) {
+    std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](const uint &i) {
         if ((msg->points[i].line < num_scans_) &&
             ((msg->points[i].tag & 0x30) == 0x10 || (msg->points[i].tag & 0x30) == 0x00)) {
                 if (msg->points[i].x < -0.5 || msg->points[i].x > 0.5 || 
@@ -397,7 +397,7 @@ void LIO::Undistort()
     SE3 T_end = SE3(imu_state.R_, imu_state.p_);
 
     //std::execution::par_unseq, 并发模式 c++17以上
-    std::for_each( cloud->points.begin(), cloud->points.end(),[&](auto &pt){
+    std::for_each(std::execution::par_unseq, cloud->points.begin(), cloud->points.end(),[&](auto &pt){
         SE3 Ti = T_end;
         NavStated match;
         // auto time_p = pt.curvature / double(1000);

@@ -33,7 +33,7 @@ find_package(OpenCV REQUIRED)
 find_package(Sophus REQUIRED)
 find_package(Boost REQUIRED COMPONENTS thread)
 find_package(glog REQUIRED)
-# find_package(TBB REQUIRED)
+find_package(TBB REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -180,6 +180,7 @@ target_link_libraries(${PROJECT_NAME}_node
   ${OpenCV_LIBRARIES}
   ${Sophus_LIBRARIES}
   # ${TBB_LIBRARIES}
+  TBB::tbb
   glog::glog
 )
 

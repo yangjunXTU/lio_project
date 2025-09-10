@@ -40,7 +40,7 @@ void IncNdt3d::AddCloud(CloudPtr cloud_world) {
     }
 
     // 更新active_voxels std::execution::par_unseq,
-    std::for_each( active_voxels.begin(), active_voxels.end(),
+    std::for_each(std::execution::par_unseq, active_voxels.begin(), active_voxels.end(),
                   [this](const auto& key) { UpdateVoxel(grids_[key]->second); });
     flag_first_scan_ = false;
 }
@@ -135,7 +135,7 @@ bool IncNdt3d::AlignNdt(SE3& init_pose) {
 
         // gauss-newton 迭代
         // 最近邻，可以并发 std::execution::par_unseq, 
-        std::for_each(index.begin(), index.end(), [&](int idx) {
+        std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](int idx) {
             auto q = ToVec3d(source_->points[idx]);
             Vec3d qs = pose * q;  // 转换之后的q
 
@@ -332,7 +332,7 @@ void IncNdt3d::ComputeResidualAndJacobians(const SE3& input_pose, Mat18d& HTVH, 
     // 最近邻，可以并发
     auto time1 = std::chrono::high_resolution_clock::now(); 
     //std::execution::par_unseq,
-    std::for_each(index.begin(), index.end(), [&](int idx) {
+    std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](int idx) {
         auto q = ToVec3d(source_->points[idx]);
         Vec3d qs = pose * q;  // 转换之后的q
 
