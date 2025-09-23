@@ -2,10 +2,8 @@
 // Created by xiang on 2021/11/11.
 //
 
-#include"static_imu_init.h"
-// #include "common/math_utils.h"
+#include"utils/static_imu_init.h"
 
-// #include <glog/logging.h>
 
 bool StaticIMUInit::AddIMU(const IMU& imu) {
     if (init_success_) {
@@ -70,7 +68,7 @@ bool StaticIMUInit::TryInit() {
     ComputeMeanAndCovDiag(init_imu_deque_, mean_acce, cov_acce_, [this](const IMU& imu) { return imu.acce_; });
 
     // 以acce均值为方向，取9.8长度为重力
-    ROS_INFO( "[imu init] mean acce: %.2f", mean_acce.transpose());
+    ROS_INFO("[imu init] mean acce: [%.2f, %.2f, %.2f]",  mean_acce[0], mean_acce[1], mean_acce[2]);
     gravity_ = -mean_acce / mean_acce.norm() * options_.gravity_norm_;
 
     // 重新计算加计的协方差
@@ -96,9 +94,14 @@ bool StaticIMUInit::TryInit() {
     //           << ", ba = " << init_ba_.transpose() << ", gyro sq = " << cov_gyro_.transpose()
     //           << ", acce sq = " << cov_acce_.transpose() << ", grav = " << gravity_.transpose()
     //           << ", norm: " << gravity_.norm();
-    ROS_INFO("[imu init]: imu init success, time: %.3f, bg: %.3f, ba: %.3f, gyro sq = %.3f, acce sq = %.3f", 
-        current_time_ - init_start_time_, init_bg_.transpose(),init_ba_.transpose(), cov_gyro_.transpose(),cov_acce_.transpose());
-    std::cout << "[imu init] mean gyro: " << mean_gyro.transpose() << " acce: " << mean_acce.transpose();
+    // ROS_INFO("[imu init]: imu init success, time: %.3f, bg: %.3f, ba: %.3f, gyro sq = %.3f, acce sq = %.3f", 
+    //     current_time_ - init_start_time_, init_bg_.transpose(),init_ba_.transpose(), cov_gyro_.transpose(),cov_acce_.transpose());
+    std::cout<< "IMU 初始化成功，初始化时间= " << current_time_ - init_start_time_ << ", bg = " << init_bg_.transpose()
+        << ", ba = " << init_ba_.transpose() << ", gyro sq = " << cov_gyro_.transpose()
+        << ", acce sq = " << cov_acce_.transpose() << ", grav = " << gravity_.transpose()
+        << ", norm: " << gravity_.norm()<<std::endl;
+
+    std::cout << "[imu init] mean gyro: " << mean_gyro.transpose() << " acce: " << mean_acce.transpose()<<std::endl;
     init_success_ = true;
     return true;
 }

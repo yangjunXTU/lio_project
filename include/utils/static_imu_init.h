@@ -14,13 +14,12 @@
 #define SLAM_IN_AUTO_DRIVING_STATIC_IMU_INIT_H
 
 #include "utils/eigen_types.h"
-#include "utils/imu.h"
-#include <deque>
-#include <numeric>
-#include <ros/ros.h>
-#include<iostream>
+#include "utils/sensor_data_structure.h"
 #include"utils/math_utils.h"
 
+#include <ros/ros.h>
+#include <iostream>
+#include <deque>
 
 /**
  * IMU水平静止状态下初始化器
@@ -30,6 +29,7 @@
  * 初始化器在每次调用AddIMU时尝试对系统进行初始化。在有odom的场合，初始化要求odom轮速读数接近零；没有时，假设车辆初期静止。
  * 初始化器收集一段时间内的IMU读数，按照书本3.5.4节估计初始零偏和噪声参数，提供给ESKF或者其他滤波器
  */
+
 class StaticIMUInit {
    public:
     struct Options {
@@ -45,6 +45,18 @@ class StaticIMUInit {
 
     /// 构造函数
     StaticIMUInit(Options options = Options()) : options_(options) {}
+    void Setoptions(double init_time_seconds_, int init_imu_queue_max_size_, int static_odom_pulse_, 
+        double max_static_gyro_var, double max_static_acce_var, double gravity_norm_, bool use_speed_for_static_checking_ ) {
+
+        options_.init_time_seconds_ = init_time_seconds_;
+        options_.init_imu_queue_max_size_ = init_imu_queue_max_size_;
+        options_.static_odom_pulse_ = static_odom_pulse_;
+        options_.max_static_gyro_var = max_static_gyro_var;
+        options_.max_static_acce_var = max_static_acce_var;
+        options_.gravity_norm_ =  gravity_norm_; 
+        options_.use_speed_for_static_checking_ = use_speed_for_static_checking_;
+      
+    }
 
     /// 添加IMU数据
     bool AddIMU(const IMU& imu);

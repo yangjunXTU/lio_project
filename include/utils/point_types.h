@@ -5,10 +5,8 @@
 #ifndef SLAM_IN_AUTO_DRIVING_POINT_TYPES_H
 #define SLAM_IN_AUTO_DRIVING_POINT_TYPES_H
 
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/impl/pcl_base.hpp>
 
+#include "utils/sensor_data_structure.h"
 #include "utils/eigen_types.h"
 
 // namespace sad {
@@ -48,24 +46,26 @@ inline PointType ToPointType(const Eigen::Matrix<S, 3, 1>& pt) {
     return p;
 }
 
-/// 带ring, range等其他信息的全量信息点云
-struct FullPointType {
-    PCL_ADD_POINT4D;
-    float range = 0;
-    float radius = 0;
-    uint8_t intensity = 0;
-    uint8_t ring = 0;
-    uint8_t angle = 0;
-    double time = 0;
-    float height = 0;
+// /// 带ring, range等其他信息的全量信息点云
+// struct FullPointType {
+//     PCL_ADD_POINT4D;
+//     float range = 0;
+//     float radius = 0;
+//     uint8_t intensity = 0;
+//     uint8_t ring = 0;
+//     uint8_t angle = 0;
+//     double offset_time = 0;
+//     float height = 0;
+//     float width = 0;
+//     double curvature;  //曲率
+//     inline FullPointType() {}
+//     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+// };
 
-    inline FullPointType() {}
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
 
-/// 全量点云的定义
-using FullPointCloudType = pcl::PointCloud<FullPointType>;
-using FullCloudPtr = FullPointCloudType::Ptr;
+// /// 全量点云的定义
+// using FullPointCloudType = pcl::PointCloud<FullPointType>;
+// using FullCloudPtr = FullPointCloudType::Ptr;
 
 inline Vec3f ToVec3f(const FullPointType& pt) { return pt.getVector3fMap(); }
 inline Vec3d ToVec3d(const FullPointType& pt) { return pt.getVector3fMap().cast<double>(); }
@@ -80,7 +80,7 @@ using UiCloudPtr = UiPointCloudType::Ptr;
 POINT_CLOUD_REGISTER_POINT_STRUCT(FullPointType,
                                   (float, x, x)(float, y, y)(float, z, z)(float, range, range)(float, radius, radius)(
                                       std::uint8_t, intensity, intensity)(std::uint16_t, angle, angle)(
-                                      std::uint8_t, ring, ring)(double, time, time)(float, height, height))
+                                      std::uint8_t, ring, ring)(double, offset_time, offset_time)(float, height, height))
 
 namespace velodyne_ros {
 struct EIGEN_ALIGN16 Point {

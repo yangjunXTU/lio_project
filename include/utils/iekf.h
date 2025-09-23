@@ -7,11 +7,12 @@
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
 
- #include<iostream>
- #include"utils/eigen_types.h"
- #include"utils/nav_state.h"
- #include"utils/imu.h"
- #include"utils/math_utils.h"
+#include<iostream>
+#include"utils/eigen_types.h"
+#include"utils/nav_state.h"
+// #include"utils/imu.h"
+#include"utils/sensor_data_structure.h"
+#include"utils/math_utils.h"
  
 #ifndef H_IEKF_LIO_HPP
 #define H_IEKF_LIO_HPP
@@ -25,7 +26,7 @@ template <typename S>
 class IESKF
 {
     public:
-        using SO3 = Sophus::SO3;                      // 旋转变量类型
+        //using SO3 = Sophus::SO3;                      // 旋转变量类型
         using VecT = Eigen::Matrix<S, 3 , 1>;            // 向量类型
         using Vec18T = Eigen::Matrix<S, 18 , 1>;         // 18维向量类型
         using Mat3T = Eigen::Matrix<S, 3 , 3>;           // 3x3矩阵类型
@@ -58,6 +59,20 @@ class IESKF
             bool update_bias_acce_ = true;  // 是否更新bias
         };
 
+        void SetOptions(int num_iterations, double quit_eps,double imu_dt,double gyro_var,double acce_var,
+                        double bias_gyro_var,double bias_acce_var,bool update_bias_gyro,bool update_bias_acce) {
+            options_.num_iterations_ = num_iterations;
+            options_.quit_eps_ = quit_eps;
+            options_.imu_dt_ = imu_dt;
+            options_.gyro_var_ = gyro_var;
+            options_.acce_var_ = acce_var;
+            options_.bias_gyro_var_ = bias_gyro_var;
+            options_.bias_acce_var_ = bias_acce_var;
+            options_.update_bias_gyro_ = update_bias_gyro;
+            options_.update_bias_acce_ = update_bias_acce;
+            std::cout<<options_.num_iterations_<<" options_.num_iterations_"<<std::endl;
+        }
+
 
         IESKF(Options option = Options()) : options_(option) { BuildNoise(option); }
         // IESKF(/* args */);
@@ -81,9 +96,6 @@ class IESKF
             cov_ = 1e-4 * Mat18T::Identity();
             cov_.template block<3, 3>(6, 6) = 0.1 * kDEG2RAD * Mat3T::Identity();
         }
-
-        NavStateT GetNominalState() const { return NavStateT(current_time_, R_, p_, v_, bg_, ba_); }
-
         // ~IESKF();
         bool Predict(const IMU& imu);
 
@@ -94,7 +106,7 @@ class IESKF
         bool UpdateUsingCustomObserve(CustomObsFunc obs);
 
         /// 全量状态
-        // NavStateT GetNominalState() const { return NavStateT(current_time_, R_, p_, v_, bg_, ba_); }
+        NavStateT GetNominalState() const { return NavStateT(current_time_, R_, p_, v_, bg_, ba_); }
 
         /// SE3 状态
         SE3 GetNominalSE3() const { return SE3(R_, p_); }

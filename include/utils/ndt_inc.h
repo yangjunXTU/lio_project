@@ -6,7 +6,6 @@
 #define SLAM_IN_AUTO_DRIVING_NDT_INC_H
 
 #include "utils/eigen_types.h" 
-// #include "common/g2o_types.h"
 #include "utils/point_types.h" 
 
 #include <list>
@@ -32,10 +31,28 @@ class IncNdt3d {
         int max_pts_in_voxel_ = 50;    // 每个栅格中最大点数
         double eps_ = 1e-3;            // 收敛判定条件
         double res_outlier_th_ = 5.0;  // 异常值拒绝阈值
-        size_t capacity_ = 100000;     // 缓存的体素数量
+        int  capacity_ = 100000;     // 缓存的体素数量
 
         NearbyType nearby_type_ = NearbyType::NEARBY6;
     };
+
+    void Setoptions(int max_iteration_, double voxel_size_, double inv_voxel_size_, int min_effective_pts_, 
+                    int min_pts_in_voxel_, int max_pts_in_voxel_, double eps_, double res_outlier_th_ , int capacity_) {
+
+        options_.max_iteration_ = max_iteration_;      
+        options_.voxel_size_ = voxel_size_;     
+        options_.inv_voxel_size_ = inv_voxel_size_;  
+        options_.min_effective_pts_ = min_effective_pts_;  
+        options_.min_pts_in_voxel_ = min_pts_in_voxel_;     
+        options_.max_pts_in_voxel_ = max_pts_in_voxel_;   
+        options_.eps_ = eps_; 
+        options_.res_outlier_th_ = res_outlier_th_; 
+        options_.capacity_ = capacity_;     
+
+        NearbyType nearby_type_ = NearbyType::NEARBY6;
+        std::cout<< options_.max_iteration_<< " options_.max_iteration_"<<std::endl;
+    }
+
 
     using KeyType = Eigen::Matrix<int, 3, 1>;  // 体素的索引
 
