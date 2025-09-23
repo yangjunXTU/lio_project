@@ -50,7 +50,7 @@ class IncNdt3d {
         options_.capacity_ = capacity_;     
 
         NearbyType nearby_type_ = NearbyType::NEARBY6;
-        std::cout<< options_.max_iteration_<< " options_.max_iteration_"<<std::endl;
+        //std::cout<< options_.max_iteration_<< " options_.max_iteration_"<<std::endl;
     }
 
 
