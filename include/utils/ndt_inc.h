@@ -6,7 +6,6 @@
 #define SLAM_IN_AUTO_DRIVING_NDT_INC_H
 
 #include "utils/eigen_types.h" 
-// #include "common/g2o_types.h"
 #include "utils/point_types.h" 
 
 #include <list>

@@ -14,8 +14,7 @@
 #include <numeric>
 #include <opencv2/core.hpp>
 
-/// 常用的数学函数
-// namespace sad::math {
+/// 常用的数学函数namespace sad::math {
 
 // 常量定义
 constexpr double kDEG2RAD = M_PI / 180.0;  // deg->rad

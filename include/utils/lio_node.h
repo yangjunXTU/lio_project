@@ -8,42 +8,27 @@
  */
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
-#include <opencv2/highgui/highgui.hpp>
 #include <cv_bridge/cv_bridge.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <unistd.h>
-#include <deque>
-#include <fstream>
 #include <livox_ros_driver2/CustomMsg.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <nav_msgs/Odometry.h>
-#include <roslz4/lz4s.h>
-
-#include<message_filters/subscriber.h>
-#include<message_filters/time_synchronizer.h>
-#include<message_filters/sync_policies/approximate_time.h>
-#include<sensor_msgs/Image.h>
-#include<boost/bind.hpp>
-#include<functional>
 #include <execution>
-
-#include<geometry_msgs/PoseWithCovariance.h>
-#include<geometry_msgs/Quaternion.h>
-#include<geometry_msgs/PoseStamped.h>
 #include<nav_msgs/Path.h>
 #include<nav_msgs/Odometry.h>
-#include<sensor_msgs/CameraInfo.h>
-#include<sensor_msgs/Imu.h>
-#include "utils/types.h"
-#include "iekf.h"
+#include <pcl/common/transforms.h>
+#include <tf/transform_broadcaster.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/Imu.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl_conversions/pcl_conversions.h>
+
+#include "utils/iekf.h"
 #include "utils/eigen_types.h"
-#include "static_imu_init.h"
+#include "utils/static_imu_init.h"
 #include "utils/math_utils.h"
 #include "utils/point_types.h"
-#include "ndt_inc.h"
-#include <pcl/common/transforms.h>
+#include "utils/ndt_inc.h"
 #include "utils/lidar_utils.h"
-#include <tf/transform_broadcaster.h>
+#include "utils/icp_inc.h"
+
 
 using namespace cv;
 using namespace std;
@@ -51,48 +36,6 @@ using namespace sad;
 #define IS_VALID( a ) ( ( abs( a ) > 1e8 ) ? true : false )
 #define ANSI_COLOR_BLUE_BOLD "\x1b[1;34m"
 
-
-struct MeasureGroup
-{
-//   double vio_time;
-  double lio_time;
-  deque<sensor_msgs::Imu::ConstPtr> imu;
-  deque<IMUPtr> imu2;
-  //   cv::Mat img;
-  MeasureGroup()
-  {
-    // vio_time = 0.0;
-    lio_time = 0.0;
-  };
-};
-
-struct LidarMeasureGroup
-{
-  double lidar_frame_beg_time;
-  double lidar_frame_end_time;
-  double last_lio_update_time;
-  PointCloudXYZI::Ptr lidar;
-  PointCloudXYZI::Ptr pcl_proc_cur;
-  FullPointCloudType::Ptr pcl_proc_cur_ndt;
-  PointCloudXYZI::Ptr pcl_proc_next;
-  deque<struct MeasureGroup> measures;
-//   EKF_STATE lio_vio_flg;
-  int lidar_scan_index_now;
-
-  LidarMeasureGroup()
-  {
-    lidar_frame_beg_time = -0.0;
-    lidar_frame_end_time = 0.0;
-    last_lio_update_time = -1.0;
-    // lio_vio_flg = WAIT;
-    this->lidar.reset(new PointCloudXYZI());
-    this->pcl_proc_cur.reset(new PointCloudXYZI());
-    this->pcl_proc_next.reset(new PointCloudXYZI());
-    this->measures.clear();
-    lidar_scan_index_now = 0;
-    last_lio_update_time = -1.0;
-  };
-};
 
 class LIO
 {
@@ -106,7 +49,7 @@ private:
     // PointCloudXYZI::Ptr scan_undistort_{new PointCloudXYZI::Ptr()}; // 格式待评估
     // PointCloudXYZI scan_undistort_;
     FullCloudPtr scan_undistort_;
-    FullPointCloudType cloud_full_, cloud_out_;  // 输出点云
+    
     
     int num_scans_ = 4;                          // 扫描线数mid360
     int point_filter_num_ = 1;                   // 跳点
@@ -120,19 +63,25 @@ private:
     int frame_num_ = 0;
     
     IncNdt3d ndt_;
+    Icp3d icp_;
     SE3 last_pose_;
+    CloudPtr last_scan_;
     
     
     void Undistort();
     void Align();
-    void Mid360Handler(const livox_ros_driver2::CustomMsg::ConstPtr &msg);
+    //void Mid360Handler(const livox_ros_driver2::CustomMsg::ConstPtr &msg);
 
 public:
     std::mutex mtx_buffer, mtx_buffer_imu_prop;
-    deque<PointCloudXYZI::Ptr> lid_raw_data_buffer;
-    std::deque<FullCloudPtr> lidar_buffer_ndt;
+    //deque<PointCloudXYZI::Ptr> lid_raw_data_buffer;
+
+    deque<FullCloudPtr> lidar_buffer_ndt;
     deque<double> lid_header_time_buffer;
-    deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
+    
+    //deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
+    deque<IMUPtr> imu_buffer;
+
     double last_timestamp_lidar = -1.0, last_timestamp_imu = -1.0;
     bool lidar_pushed = false;
     bool is_first_frame = false;
@@ -168,7 +117,7 @@ public:
     void run();
     bool sync_packages(LidarMeasureGroup &meas);
     void handleFirstFrame();
-    IMUPtr imu2IMU(const sensor_msgs::ImuConstPtr &mg_in);
+    //IMUPtr imu2IMU(const sensor_msgs::ImuConstPtr &mg_in);
     void ProcessIMU();
     void TryInitIMU();
     void ProcessLidar();
