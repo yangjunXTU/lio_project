@@ -1,10 +1,36 @@
 common:
   img_topic: "/camera/color/image_raw"
-  #lid_topic: "/livox/lidar_192_168_1_177"
-  #imu_topic: "/livox/imu_192_168_1_177"
-  lid_topic: "/livox/lidar"
-  imu_topic: "/livox/imu"
+  lidar_topic: "/livox/lidar_192_168_1_164"
+  imu_topic: "/livox/imu_192_168_1_164"
+  #lidar_topic: "/livox/lidar"
+  #imu_topic: "/livox/imu"
+
+extrin_calib:
+  # extrinsic_T: [0.04165, 0.02326, -0.0284]
+  extrinsic_T: [-0.011, -0.02329, 0.04412] # mid360 imuTolidar
+  extrinsic_R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+
+  Rcl: [0.986915,-0.159948,-0.0204072,
+          -0.0799042,-0.375201,-0.923493,
+          0.140054,0.91304,-0.38307]
+
+  Pcl: [-0.0303444, 0.864,  0.557813]
   
+camera:
+  cam_model: Pinhole
+  cam_width: 1280
+  cam_height: 720
+  scale: 0.5
+  cam_fx: 751.838
+  cam_fy: 751.081
+  cam_cx: 638.518
+  cam_cy: 357.483
+  cam_d0: 0.0701399
+  cam_d1: -0.0975887
+  cam_d2: 0.0002862
+  cam_d3: 0.0001975
+  cam_d4: 0.0392827
+
 imu:
   init_time_seconds: 5.0      #静止时间 10
   init_imu_queue_max_size: 600   #初始化IMU队列最大长度 2000

@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-22 07:53:33
+ * @LastEditTime: 2025-10-15 05:56:52
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -44,9 +44,8 @@ private:
     std::vector<NavStated> imu_states_;
     StaticIMUInit imu_init_;
 
-    SE3 TIL_;  // Lidar与IMU之间外参
-    // PointCloudXYZI::Ptr scan_undistort_{new PointCloudXYZI::Ptr()}; // 格式待评估
-    // PointCloudXYZI scan_undistort_;
+    SE3 TIL_;  // Lidar与IMU之间外参  L2I
+    SE3 TLC_;  // camera与lidar之间的外参 C2L
     FullCloudPtr scan_undistort_;
     
     
@@ -108,6 +107,11 @@ public:
     geometry_msgs::Quaternion geoQuat;
     geometry_msgs::PoseStamped msg_body_pose;
 
+    vector<double> ext_t;
+    vector<double> ext_r;
+    vector<double> cameraextrinT;
+    vector<double> cameraextrinR;
+
     //imu参数配置
     double init_time_seconds = 5.0;     // 静止时间 10
     int init_imu_queue_max_size = 600;  // 初始化IMU队列最大长度 2000
@@ -153,6 +157,9 @@ public:
     void ProcessIMU();
     void TryInitIMU();
     void ProcessLidar();
+    void ProcessCamera();
+    void initcamera();
+    void handleVIO();
     void savePCD();
     void publish_odometry(const ros::Publisher &pubOdomAftMapped);
     template <typename T> void set_posestamp(T &out);

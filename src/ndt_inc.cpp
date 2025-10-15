@@ -1,6 +1,4 @@
-//
-// Created by xiang on 2022/7/20.
-//
+
 
 #include "utils/ndt_inc.h"
 #include "utils/lidar_utils.h"

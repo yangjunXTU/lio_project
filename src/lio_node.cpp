@@ -3,15 +3,16 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-25 01:54:38
+ * @LastEditTime: 2025-10-15 06:00:34
  */
+
 #include"utils/lio_node.h"
 
 LIO::LIO(/* args */)
 {
     FullCloudPtr scan_undistort_{new FullPointCloudType()};
     
-    nh.param<std::string> ("common/lid_topic",LiDAR_pointcloud_topic,std::string("/livox/lidar"));
+    nh.param<std::string> ("common/lidar_topic",LiDAR_pointcloud_topic,std::string("/livox/lidar"));
     nh.param<std::string> ("common/img_topic",IMAGE_color,std::string("/camera/color/image_raw"));
     nh.param<std::string> ("common/imu_topic",IMU_topic,std::string("/livox/imu"));
 
@@ -106,12 +107,26 @@ LIO::LIO(/* args */)
     pubPath = nh.advertise<nav_msgs::Path>("/path", 10);
     mavros_pose_publisher = nh.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 10);
 
-    std::vector<double> ext_t = {-0.011, -0.02329, 0.04412};
-    std::vector<double> ext_r ={1, 0, 0, 0, 1, 0, 0, 0, 1};
+    // std::vector<double> ext_t = {-0.011, -0.02329, 0.04412};
+    // std::vector<double> ext_r ={1, 0, 0, 0, 1, 0, 0, 0, 1};
+    ext_t.assign(3, 0.0);
+    ext_r.assign(9, 0.0);
+    cameraextrinT.assign(3, 0.0);
+    cameraextrinR.assign(9, 0.0);
+
+    nh.param<vector<double>>("extrin_calib/extrinsic_T", ext_t, vector<double>());
+    nh.param<vector<double>>("extrin_calib/extrinsic_R", ext_r, vector<double>());
+    nh.param<vector<double>>("extrin_calib/Pcl", cameraextrinT, vector<double>());
+    nh.param<vector<double>>("extrin_calib/Rcl", cameraextrinR, vector<double>());
 
     Eigen::Vector3d lidar_T_wrt_IMU = VecFromArray(ext_t);
     Eigen::Matrix3d lidar_R_wrt_IMU = MatFromArray(ext_r);
     TIL_ = SE3(lidar_R_wrt_IMU, lidar_T_wrt_IMU);
+        
+    Eigen::Vector3d camera_T_wrt_lidar = VecFromArray(cameraextrinT);
+    Eigen::Matrix3d camera_R_wrt_lidar = MatFromArray(cameraextrinR);
+    TLC_ = SE3(camera_R_wrt_lidar, camera_T_wrt_lidar);
+    
     path.header.stamp = ros::Time::now();
     path.header.frame_id = "map";
 }
@@ -631,6 +646,25 @@ void LIO::publish_mavros(const ros::Publisher &mavros_pose_publisher)
   mavros_pose_publisher.publish(msg_body_pose);
 }
 
+void LIO::ProcessCamera()
+{
+    initcamera();
+    handleVIO();
+
+}
+
+void LIO::initcamera()
+{
+    return;
+}
+
+void LIO::handleVIO()
+{
+    if (image_get.empty()) return;
+
+    
+}
+
 void LIO::run()
 {
     // This function can be used to start the processing loop if needed
@@ -653,9 +687,12 @@ void LIO::run()
             continue;
         }
         handleFirstFrame();
+        
         ProcessIMU();
         
         ProcessLidar();
+
+        ProcessCamera();
         
     }
     savePCD();
