@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-13 02:24:16
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-08-20 07:01:16
+ * @LastEditTime: 2025-10-15 06:32:33
  * @FilePath: /lio_project_wk/src/lio_project/src/iekf.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -105,6 +105,8 @@ class IESKF
         /// 使用自定义观测函数更新滤波器
         bool UpdateUsingCustomObserve(CustomObsFunc obs);
 
+        bool ObserveSE3(const SE3& pose, double trans_noise, double ang_noise);
+
         /// 全量状态
         NavStateT GetNominalState() const { return NavStateT(current_time_, R_, p_, v_, bg_, ba_); }
 
@@ -159,6 +161,32 @@ class IESKF
                 ba_ += dx_.template block<3, 1>(12, 0);
             }
             g_ += dx_.template block<3, 1>(15, 0);
+        }
+
+        void UpdateAndReset() {
+            p_ += dx_.template block<3, 1>(0, 0);
+            v_ += dx_.template block<3, 1>(3, 0);
+            R_ = R_ * SO3::exp(dx_.template block<3, 1>(6, 0));
+
+            if (options_.update_bias_gyro_) {
+                bg_ += dx_.template block<3, 1>(9, 0);
+            }
+
+            if (options_.update_bias_acce_) {
+                ba_ += dx_.template block<3, 1>(12, 0);
+            }
+
+            g_ += dx_.template block<3, 1>(15, 0);
+
+            ProjectCov();
+            dx_.setZero();
+        }
+
+        /// 对P阵进行投影，参考式(3.63)
+        void ProjectCov() {
+            Mat18T J = Mat18T::Identity();
+            J.template block<3, 3>(6, 6) = Mat3T::Identity() - 0.5 * SO3::hat(dx_.template block<3, 1>(6, 0));
+            cov_ = J * cov_ * J.transpose();
         }
 
         double current_time_ = 0.0;
@@ -268,6 +296,33 @@ bool IESKF<S>::UpdateUsingCustomObserve(IESKF::CustomObsFunc obs) {
     cov_ = J * cov_ * J.inverse();
 
     dx_.setZero();
+    return true;
+}
+
+template <typename S>
+bool IESKF<S>::ObserveSE3(const SE3& pose, double trans_noise, double ang_noise) {
+    /// 既有旋转，也有平移
+    /// 观测状态变量中的p, R，H为6x18，其余为零
+    Eigen::Matrix<S, 6, 18> H = Eigen::Matrix<S, 6, 18>::Zero();
+    H.template block<3, 3>(0, 0) = Mat3T::Identity();  // P部分
+    H.template block<3, 3>(3, 6) = Mat3T::Identity();  // R部分（3.66)
+
+    // 卡尔曼增益和更新过程
+    Vec6d noise_vec;
+    noise_vec << trans_noise, trans_noise, trans_noise, ang_noise, ang_noise, ang_noise;
+
+    Mat6d V = noise_vec.asDiagonal();
+    Eigen::Matrix<S, 18, 6> K = cov_ * H.transpose() * (H * cov_ * H.transpose() + V).inverse();
+
+    // 更新x和cov
+    Vec6d innov = Vec6d::Zero();
+    innov.template head<3>() = (pose.translation() - p_);          // 平移部分
+    innov.template tail<3>() = (R_.inverse() * pose.so3()).log();  // 旋转部分(3.67)
+
+    dx_ = K * innov;
+    cov_ = (Mat18T::Identity() - K * H) * cov_;
+
+    UpdateAndReset();
     return true;
 }
 
