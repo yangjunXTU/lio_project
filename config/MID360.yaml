@@ -1,9 +1,11 @@
 common:
-  img_topic: "/camera/color/image_raw"
+  img_topic: "/bot_rear/color/image_raw"
   lidar_topic: "/livox/lidar_192_168_1_164"
   imu_topic: "/livox/imu_192_168_1_164"
   #lidar_topic: "/livox/lidar"
   #imu_topic: "/livox/imu"
+  img_en: 0
+  lidar_en: 1
 
 extrin_calib:
   # extrinsic_T: [0.04165, 0.02326, -0.0284]

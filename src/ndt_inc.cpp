@@ -307,7 +307,7 @@ void IncNdt3d::ComputeResidualAndJacobians(const SE3& input_pose, Mat18d& HTVH, 
     double duration_time_seconds = duration_time.count(); 
     std::chrono::duration<double> duration_time2 = time3 - time2;
     double duration_time_seconds2 = duration_time2.count(); 
-    LOG(INFO) << "effective: " << effective_num << " time_J: "<<duration_time_seconds <<" sum_J: "<< duration_time_seconds2<<" grid.size: "<<grids_.size();
+    // LOG(INFO) << "effective: " << effective_num << " time_J: "<<duration_time_seconds <<" sum_J: "<< duration_time_seconds2<<" grid.size: "<<grids_.size();
 }
 
 // void IncNdt3d::BuildNDTEdges(sad::VertexPose* v, std::vector<EdgeNDT*>& edges) {

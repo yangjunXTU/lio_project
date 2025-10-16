@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-15 06:00:34
+ * @LastEditTime: 2025-10-16 06:43:23
  */
 
 #include"utils/lio_node.h"
@@ -15,6 +15,8 @@ LIO::LIO(/* args */)
     nh.param<std::string> ("common/lidar_topic",LiDAR_pointcloud_topic,std::string("/livox/lidar"));
     nh.param<std::string> ("common/img_topic",IMAGE_color,std::string("/camera/color/image_raw"));
     nh.param<std::string> ("common/imu_topic",IMU_topic,std::string("/livox/imu"));
+    nh.param<int>("common/img_en", img_en, 1);
+    nh.param<int>("common/lidar_en", lidar_en, 1);
 
     sub_img = nh.subscribe(IMAGE_color.c_str(), 1000000, &LIO::image_callback, this, ros::TransportHints().tcpNoDelay());
     sub_pcl = nh.subscribe(LiDAR_pointcloud_topic.c_str(), 1000, &LIO::feat_points_cbk, this, ros::TransportHints().tcpNoDelay());
@@ -129,6 +131,8 @@ LIO::LIO(/* args */)
     
     path.header.stamp = ros::Time::now();
     path.header.frame_id = "map";
+
+    slam_mode_ = (img_en && lidar_en) ? LIVO : imu_en ? ONLY_LIO : ONLY_LO;
 }
 
 
@@ -322,19 +326,45 @@ void LIO::imu_cbk(const sensor_msgs::ImuConstPtr &msg_in){
 //9.80665
 
 void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
+
+
     cv_bridge::CvImagePtr cv_ptr_compressed = cv_bridge::toCvCopy( msg, sensor_msgs::image_encodings::BGR8 );
-    // img_rec_time = msg->header.stamp.toSec();
-    image_get = cv_ptr_compressed->image;
+    double msg_header_time = msg->header.stamp.toSec(); //+ img_time_offset;
+    if (abs(msg_header_time - last_timestamp_img) < 0.001) return;
+    ROS_INFO("Get image, its header time: %.6f", msg_header_time);
+    if (last_timestamp_lidar < 0) return;
+
+    if (msg_header_time < last_timestamp_img)
+    {
+        ROS_ERROR("image loop back. \n");
+        return;
+    }
+    mtx_buffer.lock();
+    double img_time_correct = msg_header_time;
+
+    if (img_time_correct - last_timestamp_img < 0.02)
+    {
+        ROS_WARN("Image need Jumps: %.6f", img_time_correct);
+        mtx_buffer.unlock();
+        return;
+    }
+
+    cv::Mat image_cur = cv_ptr_compressed->image;
     cv_ptr_compressed->image.release();
+    img_buffer.push_back(image_cur);
+    img_time_buffer.push_back(img_time_correct);
 
-    cv_bridge::CvImage out_msg;
-    out_msg.header.stamp = msg->header.stamp;               // Same timestamp and tf frame as input image
-    out_msg.encoding = sensor_msgs::image_encodings::BGR8; // Or whatever
-    out_msg.image = image_get;                                   // Your cv::Mat
-    out_msg.header.frame_id = "map";
+    last_timestamp_img = img_time_correct;
+    mtx_buffer.unlock();
 
-    // std::cout<<"color frame id : "<< out_msg.header.frame_id << endl;
-    pub_img.publish( out_msg );
+    // cv_bridge::CvImage out_msg;
+    // out_msg.header.stamp = msg->header.stamp;               // Same timestamp and tf frame as input image
+    // out_msg.encoding = sensor_msgs::image_encodings::BGR8; // Or whatever
+    // out_msg.image = image_get;                                   // Your cv::Mat
+    // out_msg.header.frame_id = "map";
+
+    // // std::cout<<"color frame id : "<< out_msg.header.frame_id << endl;
+    // pub_img.publish( out_msg );
 }
 
 bool LIO::sync_packages(LidarMeasureGroup &meas){
@@ -422,7 +452,7 @@ void LIO::ProcessIMU()
         ieskf_.Predict(*imu);
         imu_states_.emplace_back(ieskf_.GetNominalState());
     }
-    ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
+    // ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
 
 }
 
@@ -565,6 +595,9 @@ void LIO::Align()
 
 void LIO::ProcessLidar()
 {
+    if (imu_need_init_) {
+        return;
+    }
     // lildar undistort
     Undistort();
     Align();
@@ -692,7 +725,7 @@ void LIO::run()
         
         ProcessLidar();
 
-        ProcessCamera();
+        // ProcessCamera();
         
     }
     savePCD();

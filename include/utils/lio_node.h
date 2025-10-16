@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-15 05:56:52
+ * @LastEditTime: 2025-10-16 06:42:12
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -34,6 +34,13 @@ using namespace std;
 using namespace sad;
 #define IS_VALID( a ) ( ( abs( a ) > 1e8 ) ? true : false )
 #define ANSI_COLOR_BLUE_BOLD "\x1b[1;34m"
+
+enum SLAM_MODE
+{
+  ONLY_LO = 0,
+  ONLY_LIO = 1,
+  LIVO = 2
+};
 
 
 class LIO
@@ -78,10 +85,16 @@ public:
     //deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
     deque<IMUPtr> imu_buffer;
 
-    double last_timestamp_lidar = -1.0, last_timestamp_imu = -1.0;
+    deque<cv::Mat> img_buffer;
+    deque<double> img_time_buffer;
+
+    double last_timestamp_lidar = -1.0, last_timestamp_imu = -1.0, last_timestamp_img = -1.0;
     bool lidar_pushed = false;
     bool is_first_frame = false;
     double _first_lidar_time = 0.0;
+
+    int img_en = 1, lidar_en = 1;
+    SLAM_MODE slam_mode_;
 
     bool imu_need_init_ = true;
     

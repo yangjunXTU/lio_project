@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-13 02:24:16
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-15 06:32:33
+ * @LastEditTime: 2025-10-15 07:11:10
  * @FilePath: /lio_project_wk/src/lio_project/src/iekf.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -299,6 +299,7 @@ bool IESKF<S>::UpdateUsingCustomObserve(IESKF::CustomObsFunc obs) {
     return true;
 }
 
+// 松耦合观测
 template <typename S>
 bool IESKF<S>::ObserveSE3(const SE3& pose, double trans_noise, double ang_noise) {
     /// 既有旋转，也有平移
