@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-16 06:43:23
+ * @LastEditTime: 2025-10-16 07:00:21
  */
 
 #include"utils/lio_node.h"
@@ -132,7 +132,7 @@ LIO::LIO(/* args */)
     path.header.stamp = ros::Time::now();
     path.header.frame_id = "map";
 
-    slam_mode_ = (img_en && lidar_en) ? LIVO : imu_en ? ONLY_LIO : ONLY_LO;
+    slam_mode_ = (img_en && lidar_en) ? LIVO : ONLY_LIO;
 }
 
 
@@ -367,57 +367,83 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
     // pub_img.publish( out_msg );
 }
 
-bool LIO::sync_packages(LidarMeasureGroup &meas){
+bool LIO::sync_packages(LidarMeasureGroup &meas)
+{
+    if(lidar_buffer_ndt.empty() && lidar_en) return false;
+    if(img_buffer.empty() && img_en) return false;
 
-    if (lidar_buffer_ndt.empty()) return false;
-    if (imu_buffer.empty()) return false;
-
-    if (!lidar_pushed)
+    switch (slam_mode_)
     {
-      // If not push the lidar into measurement data buffer
-      // 激光雷达点云指针缓存器的第一帧点云给 给雷达测量组meas.lidar
-      meas.lidar = lidar_buffer_ndt.front(); // push the first lidar topic
-      if (meas.lidar->points.size() <= 1) return false;  // 判断点云数量
-
-      meas.lidar_frame_beg_time = lid_header_time_buffer.front();                                                // generate lidar_frame_beg_time
-      meas.lidar_frame_end_time = meas.lidar_frame_beg_time + meas.lidar->points.back().offset_time / double(1000); // calc lidar scan end time
-      //meas.pcl_proc_cur = meas.lidar;
-      meas.pcl_proc_cur_ndt = lidar_buffer_ndt.front();
-      lidar_pushed = true;                                                                                       // flag
-    }
-    // TODO: add imu data to meas
-    if (last_timestamp_imu < meas.lidar_frame_end_time)
-    { 
-      return false;
-    }
-
-    struct MeasureGroup m;
-    //m.imu.clear();
-    m.imu.clear();
-    m.lio_time = meas.lidar_frame_end_time;
-
-    mtx_buffer.lock();
-    while (!imu_buffer.empty())
+    case ONLY_LIO:
     {
-      if (imu_buffer.front()->timestamp_ > meas.lidar_frame_end_time) break;
-      //IMUPtr imu = imuIMU(imu_buffer.front());
-      IMUPtr imu = imu_buffer.front();
-      m.imu.emplace_back(imu);
-    //   ROS_INFO("imu->timestamp_: %.6f ",  imu->timestamp_);
-      //m.imu.push_back(imu_buffer.front()); // 添加IMU数据
-      imu_buffer.pop_front(); // 移除处理过的IMU数据
+        if (lidar_buffer_ndt.empty()) return false;
+        if (imu_buffer.empty()) return false;
+
+        if (!lidar_pushed)
+        {
+        // If not push the lidar into measurement data buffer
+        // 激光雷达点云指针缓存器的第一帧点云给 给雷达测量组meas.lidar
+        meas.lidar = lidar_buffer_ndt.front(); // push the first lidar topic
+        if (meas.lidar->points.size() <= 1) return false;  // 判断点云数量
+
+        meas.lidar_frame_beg_time = lid_header_time_buffer.front();                                                // generate lidar_frame_beg_time
+        meas.lidar_frame_end_time = meas.lidar_frame_beg_time + meas.lidar->points.back().offset_time / double(1000); // calc lidar scan end time
+        //meas.pcl_proc_cur = meas.lidar;
+        meas.pcl_proc_cur_ndt = lidar_buffer_ndt.front();
+        lidar_pushed = true;                                                                                       // flag
+        }
+        // TODO: add imu data to meas
+        if (last_timestamp_imu < meas.lidar_frame_end_time)
+        { 
+        return false;
+        }
+
+        struct MeasureGroup m;
+        //m.imu.clear();
+        m.imu.clear();
+        m.lio_time = meas.lidar_frame_end_time;
+
+        mtx_buffer.lock();
+        while (!imu_buffer.empty())
+        {
+        if (imu_buffer.front()->timestamp_ > meas.lidar_frame_end_time) break;
+        //IMUPtr imu = imuIMU(imu_buffer.front());
+        IMUPtr imu = imu_buffer.front();
+        m.imu.emplace_back(imu);
+        //   ROS_INFO("imu->timestamp_: %.6f ",  imu->timestamp_);
+        //m.imu.push_back(imu_buffer.front()); // 添加IMU数据
+        imu_buffer.pop_front(); // 移除处理过的IMU数据
+        }
+        // 移除激光雷达数据和时间戳
+        // lid_raw_data_buffer.pop_front();
+        lidar_buffer_ndt.pop_front();
+        lid_header_time_buffer.pop_front();
+        mtx_buffer.unlock();
+
+        // meas.lio_vio_flg = LIO; // 标记为LIO模式
+        meas.measures.push_back(m); // 将测量数据添加到队列中
+        lidar_pushed = false; // 重置标记
+
+        return true;
+        
+        break;
     }
-    // 移除激光雷达数据和时间戳
-   // lid_raw_data_buffer.pop_front();
-    lidar_buffer_ndt.pop_front();
-    lid_header_time_buffer.pop_front();
-    mtx_buffer.unlock();
+    case LIVO:
+    {
+        // double img_capture_time = img_time_buffer.front();
+        return false;
+        break;
+    }
 
-    // meas.lio_vio_flg = LIO; // 标记为LIO模式
-    meas.measures.push_back(m); // 将测量数据添加到队列中
-    lidar_pushed = false; // 重置标记
+    default:
+    {
+        return false;
+        break;
+    }
+        
+    }
 
-    return true;
+    
 }
 
 void LIO::handleFirstFrame() 
