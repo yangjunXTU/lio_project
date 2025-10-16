@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-16 07:00:21
+ * @LastEditTime: 2025-10-16 07:41:59
  */
 
 #include"utils/lio_node.h"
@@ -430,16 +430,98 @@ bool LIO::sync_packages(LidarMeasureGroup &meas)
     }
     case LIVO:
     {
-        // double img_capture_time = img_time_buffer.front();
-        return false;
-        break;
+        double img_capture_time = img_time_buffer.front();
+        if (meas.last_lio_update_time < 0.0) meas.last_lio_update_time = lid_header_time_buffer.front();
+      
+        double lid_newest_time = lid_header_time_buffer.back() + lidar_buffer_ndt.back()->points.back().curvature / double(1000);
+        double imu_newest_time = imu_buffer.back()->timestamp_;
+
+        if (img_capture_time < meas.last_lio_update_time + 0.00001)
+        {
+            img_buffer.pop_front();
+            img_time_buffer.pop_front();
+            ROS_ERROR("[ Data Cut ] Throw one image frame! \n");
+            return false;
+        }
+
+        if (img_capture_time > lid_newest_time || img_capture_time > imu_newest_time)
+        {
+            return false;
+        }
+
+        struct MeasureGroup m;
+
+        // 加入imu数据
+        m.imu.clear();
+        m.lio_time = img_capture_time;
+
+        mtx_buffer.lock();
+        while (!imu_buffer.empty())
+        {
+            if (imu_buffer.front()->header.stamp.toSec() > m.lio_time) break;
+
+            if (imu_buffer.front()->header.stamp.toSec() > meas.last_lio_update_time) m.imu.push_back(imu_buffer.front());
+
+            imu_buffer.pop_front();
+            // printf("[ Data Cut ] imu time: %lf \n",
+            // imu_buffer.front()->header.stamp.toSec());
+        }
+        mtx_buffer.unlock();
+
+        *(meas.pcl_proc_cur) = *(meas.pcl_proc_next);
+        PointCloudXYZI().swap(*meas.pcl_proc_next);
+
+        // 加入lidar数据
+        int lid_frame_num = lidar_buffer_ndt.size();
+        int max_size = meas.pcl_proc_cur->size() + 24000 * lid_frame_num;
+        meas.pcl_proc_cur->reserve(max_size);
+        meas.pcl_proc_next->reserve(max_size);
+        
+        while (!lid_raw_data_buffer.empty())
+        {
+            if (lid_header_time_buffer.front() > img_capture_time) break;
+            auto pcl(lid_raw_data_buffer.front()->points);
+            double frame_header_time(lid_header_time_buffer.front());
+            float max_offs_time_ms = (m.lio_time - frame_header_time) * 1000.0f;
+
+            for (int i = 0; i < pcl.size(); i++)
+            {
+            auto pt = pcl[i];
+            if (pcl[i].curvature < max_offs_time_ms)
+            {
+                pt.curvature += (frame_header_time - meas.last_lio_update_time) * 1000.0f;
+                meas.pcl_proc_cur->points.push_back(pt);
+            }
+            else
+            {
+                pt.curvature += (frame_header_time - m.lio_time) * 1000.0f;
+                meas.pcl_proc_next->points.push_back(pt);
+            }
+            }
+            lid_raw_data_buffer.pop_front();
+            lid_header_time_buffer.pop_front();
+        }
+        meas.measures.push_back(m);
+
+        // 加入camera数据
+        m.lio_time = meas.last_lio_update_time;
+        m.vio_time = img_capture_time;
+        m.img = img_buffer.front();
+
+        mtx_buffer.lock();
+        img_buffer.pop_front();
+        img_time_buffer.pop_front();
+        mtx_buffer.unlock();
+        meas.measures.push_back(m);
+
+        return true;
     }
 
     default:
     {
         return false;
-        break;
     }
+    break;
         
     }
 
@@ -707,6 +789,15 @@ void LIO::publish_mavros(const ros::Publisher &mavros_pose_publisher)
 
 void LIO::ProcessCamera()
 {
+    if(lidar_buffer_ndt.empty() && lidar_en) return false;
+    if(img_buffer.empty() && img_en) return false;
+
+    if (pcl_wait_save->empty() || (pcl_wait_save == nullptr)) 
+    {
+        std::cout << "[ VIO ] No point!!!" << std::endl;
+        return;
+    }
+
     initcamera();
     handleVIO();
 
@@ -751,7 +842,7 @@ void LIO::run()
         
         ProcessLidar();
 
-        // ProcessCamera();
+        ProcessCamera();
         
     }
     savePCD();
