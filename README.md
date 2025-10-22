@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-25 07:09:51
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-22 02:08:22
+ * @LastEditTime: 2025-10-22 02:10:04
  * @FilePath: /lio_project_wk/src/lio_project/README.md
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 -->
@@ -34,6 +34,7 @@
 15、可视化数据、path、里程计等；
 
 ## 二、进行中
+
 1、imu、lidar、camera数据重组同步；（代码已完成）
 2、camera参数传递；（内外参传递已完成，camera参数尚未添加）
 3、VIO数据机构撰写：camera、Frame等；
