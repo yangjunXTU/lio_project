@@ -3,7 +3,7 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-16 07:41:59
+ * @LastEditTime: 2025-10-21 07:27:09
  */
 
 #include"utils/lio_node.h"
@@ -133,6 +133,8 @@ LIO::LIO(/* args */)
     path.header.frame_id = "map";
 
     slam_mode_ = (img_en && lidar_en) ? LIVO : ONLY_LIO;
+
+    
 }
 
 
@@ -331,7 +333,7 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
     cv_bridge::CvImagePtr cv_ptr_compressed = cv_bridge::toCvCopy( msg, sensor_msgs::image_encodings::BGR8 );
     double msg_header_time = msg->header.stamp.toSec(); //+ img_time_offset;
     if (abs(msg_header_time - last_timestamp_img) < 0.001) return;
-    ROS_INFO("Get image, its header time: %.6f", msg_header_time);
+    // ROS_INFO("Get image, its header time: %.6f", msg_header_time);
     if (last_timestamp_lidar < 0) return;
 
     if (msg_header_time < last_timestamp_img)
@@ -376,28 +378,33 @@ bool LIO::sync_packages(LidarMeasureGroup &meas)
     {
     case ONLY_LIO:
     {
+        ROS_INFO("-----------ONLY_LIO MODE!!!");
         if (lidar_buffer_ndt.empty()) return false;
+        ROS_INFO("-----------ONLY_LIO MODE!!! 1");
         if (imu_buffer.empty()) return false;
-
+ROS_INFO("-----------ONLY_LIO MODE!!! 1.1");
         if (!lidar_pushed)
         {
-        // If not push the lidar into measurement data buffer
-        // 激光雷达点云指针缓存器的第一帧点云给 给雷达测量组meas.lidar
-        meas.lidar = lidar_buffer_ndt.front(); // push the first lidar topic
-        if (meas.lidar->points.size() <= 1) return false;  // 判断点云数量
-
-        meas.lidar_frame_beg_time = lid_header_time_buffer.front();                                                // generate lidar_frame_beg_time
-        meas.lidar_frame_end_time = meas.lidar_frame_beg_time + meas.lidar->points.back().offset_time / double(1000); // calc lidar scan end time
-        //meas.pcl_proc_cur = meas.lidar;
-        meas.pcl_proc_cur_ndt = lidar_buffer_ndt.front();
-        lidar_pushed = true;                                                                                       // flag
+            // If not push the lidar into measurement data buffer
+            // 激光雷达点云指针缓存器的第一帧点云给 给雷达测量组meas.lidar
+            meas.lidar = lidar_buffer_ndt.front(); // push the first lidar topic
+            ROS_INFO("-----------ONLY_LIO MODE!!! 1.3");
+            if (meas.lidar->points.size() <= 1) return false;  // 判断点云数量
+            ROS_INFO("-----------ONLY_LIO MODE!!! 1.2");
+            meas.lidar_frame_beg_time = lid_header_time_buffer.front();                                                // generate lidar_frame_beg_time
+            meas.lidar_frame_end_time = meas.lidar_frame_beg_time + meas.lidar->points.back().offset_time / double(1000); // calc lidar scan end time
+            meas.pcl_proc_cur = meas.lidar;
+            
+            meas.pcl_proc_cur = lidar_buffer_ndt.front();
+            lidar_pushed = true;                                                                                       // flag
         }
+        ROS_INFO("-----------ONLY_LIO MODE!!! 1.3");
         // TODO: add imu data to meas
         if (last_timestamp_imu < meas.lidar_frame_end_time)
         { 
         return false;
         }
-
+ROS_INFO("-----------ONLY_LIO MODE!!! 2");
         struct MeasureGroup m;
         //m.imu.clear();
         m.imu.clear();
@@ -414,6 +421,7 @@ bool LIO::sync_packages(LidarMeasureGroup &meas)
         //m.imu.push_back(imu_buffer.front()); // 添加IMU数据
         imu_buffer.pop_front(); // 移除处理过的IMU数据
         }
+        ROS_INFO("-----------ONLY_LIO MODE!!! 3");
         // 移除激光雷达数据和时间戳
         // lid_raw_data_buffer.pop_front();
         lidar_buffer_ndt.pop_front();
@@ -423,16 +431,17 @@ bool LIO::sync_packages(LidarMeasureGroup &meas)
         // meas.lio_vio_flg = LIO; // 标记为LIO模式
         meas.measures.push_back(m); // 将测量数据添加到队列中
         lidar_pushed = false; // 重置标记
-
+        ROS_INFO("-----------ONLY_LIO MODE!!! end");
         return true;
         
         break;
     }
     case LIVO:
     {
+        // ROS_INFO("-----------LIVO MODE!!!");
         double img_capture_time = img_time_buffer.front();
         if (meas.last_lio_update_time < 0.0) meas.last_lio_update_time = lid_header_time_buffer.front();
-      
+        // ROS_INFO("[sync]--------->last_lio_update_time= %.06lf",meas.last_lio_update_time);
         double lid_newest_time = lid_header_time_buffer.back() + lidar_buffer_ndt.back()->points.back().curvature / double(1000);
         double imu_newest_time = imu_buffer.back()->timestamp_;
 
@@ -458,55 +467,88 @@ bool LIO::sync_packages(LidarMeasureGroup &meas)
         mtx_buffer.lock();
         while (!imu_buffer.empty())
         {
-            if (imu_buffer.front()->header.stamp.toSec() > m.lio_time) break;
+            if (imu_buffer.front()->timestamp_ > m.lio_time) break;
 
-            if (imu_buffer.front()->header.stamp.toSec() > meas.last_lio_update_time) m.imu.push_back(imu_buffer.front());
+            if (imu_buffer.front()->timestamp_ > meas.last_lio_update_time) m.imu.push_back(imu_buffer.front());
 
             imu_buffer.pop_front();
-            // printf("[ Data Cut ] imu time: %lf \n",
-            // imu_buffer.front()->header.stamp.toSec());
+
         }
         mtx_buffer.unlock();
+        ROS_INFO("-----------LIVO MODE  add imu");
 
         *(meas.pcl_proc_cur) = *(meas.pcl_proc_next);
-        PointCloudXYZI().swap(*meas.pcl_proc_next);
-
+        // ROS_INFO("-----------LIVO MODE  add lidar1");
+        FullPointCloudType().swap(*meas.pcl_proc_next);
+        // ROS_INFO("-----------LIVO MODE  add lidar2");
         // 加入lidar数据
         int lid_frame_num = lidar_buffer_ndt.size();
         int max_size = meas.pcl_proc_cur->size() + 24000 * lid_frame_num;
         meas.pcl_proc_cur->reserve(max_size);
         meas.pcl_proc_next->reserve(max_size);
+        // ROS_INFO("-----------LIVO MODE  add lidar3");
+        // meas.last_lio_update_time = lid_header_time_buffer.front();
         
-        while (!lid_raw_data_buffer.empty())
+        while (!lidar_buffer_ndt.empty())
         {
-            if (lid_header_time_buffer.front() > img_capture_time) break;
-            auto pcl(lid_raw_data_buffer.front()->points);
+            if (lid_header_time_buffer.empty()) {
+                // 处理空队列情况
+                break; // 或其他适当的错误处理
+            }
+            mtx_buffer.lock();
+            // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 0");
+            if (lid_header_time_buffer.front() > m.lio_time){
+                mtx_buffer.unlock();break;
+            } 
+            // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 1");
+            auto pcl(lidar_buffer_ndt.front()->points);
+            // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 2");
             double frame_header_time(lid_header_time_buffer.front());
-            float max_offs_time_ms = (m.lio_time - frame_header_time) * 1000.0f;
+            // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 3");
+            double max_offs_time_ms = (m.lio_time - frame_header_time) * 1000.0f;
+            // ROS_INFO("[sync]--------->max_offs_time_ms= %.06lf",max_offs_time_ms);
+            mtx_buffer.unlock();
 
             for (int i = 0; i < pcl.size(); i++)
             {
             auto pt = pcl[i];
-            if (pcl[i].curvature < max_offs_time_ms)
+            if (pcl[i].offset_time < max_offs_time_ms)
             {
-                pt.curvature += (frame_header_time - meas.last_lio_update_time) * 1000.0f;
+                pt.offset_time += (frame_header_time - meas.last_lio_update_time) * 1000.0f;
+                // pt.offset_time = pt.curvature / double(1000);
                 meas.pcl_proc_cur->points.push_back(pt);
             }
             else
             {
-                pt.curvature += (frame_header_time - m.lio_time) * 1000.0f;
+                pt.offset_time += (frame_header_time - m.lio_time) * 1000.0f;
+                // pt.offset_time = pt.curvature / double(1000);
                 meas.pcl_proc_next->points.push_back(pt);
             }
             }
-            lid_raw_data_buffer.pop_front();
+            mtx_buffer.lock();
+            lidar_buffer_ndt.pop_front();
             lid_header_time_buffer.pop_front();
+            mtx_buffer.unlock();
         }
-        meas.measures.push_back(m);
+        
+        // ROS_INFO("[sync]--------->pt.offset_time= %.06lf",meas.pcl_proc_cur->points.back().offset_time);
+        // meas.last_lio_update_time = meas.pcl_proc_cur
+        // meas.pcl_proc_cur_ndt = meas.pcl_proc_cur;
+        // meas.last_lio_update_time += meas.pcl_proc_cur->points.back().offset_time;
+        //  ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 4");
+        meas.lidar_frame_beg_time = meas.last_lio_update_time;                                                // generate lidar_frame_beg_time
+        meas.lidar_frame_end_time = m.lio_time;
+        //  ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 5");
+        meas.last_lio_update_time = m.lio_time; // m.lio_time;
+        // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 6");
+        // meas.measures.push_back(m);
 
         // 加入camera数据
-        m.lio_time = meas.last_lio_update_time;
+        // m.lio_time = meas.last_lio_update_time;
         m.vio_time = img_capture_time;
+        // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 7");
         m.img = img_buffer.front();
+        ROS_INFO("-----------LIVO MODE  add camera");
 
         mtx_buffer.lock();
         img_buffer.pop_front();
@@ -542,11 +584,11 @@ void LIO::handleFirstFrame()
 
 void LIO::ProcessIMU()
 {
-    // ROS_INFO("ProcessIMU....");
+    ROS_INFO("ProcessIMU....");
     // imu init
     if (imu_need_init_) {
         // 初始化IMU系统
-        // ROS_INFO("start init---->");
+        ROS_INFO("start init---->");
         TryInitIMU();
         return;
     }
@@ -560,8 +602,7 @@ void LIO::ProcessIMU()
         ieskf_.Predict(*imu);
         imu_states_.emplace_back(ieskf_.GetNominalState());
     }
-    // ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
-
+    ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
 }
 
 void LIO::TryInitIMU()
@@ -586,29 +627,35 @@ void LIO::TryInitIMU()
 void LIO::Undistort()
 {
     // scan_undistort_.clear();
-    auto cloud = LidarMeasures.pcl_proc_cur_ndt;
+    auto cloud = LidarMeasures.pcl_proc_cur;
     auto imu_state = ieskf_.GetNominalState();
     SE3 T_end = SE3(imu_state.R_, imu_state.p_);
-
+    // ROS_INFO("[ProcessLidar]--------->Undistort 1");
     //std::execution::par_unseq, 并发模式 c++17以上
+    double pt_time=0.0;
     std::for_each( cloud->points.begin(), cloud->points.end(),[&](auto &pt){
         SE3 Ti = T_end;
         NavStated match;
         // auto time_p = pt.curvature / double(1000);
+        //LidarMeasures.lidar_frame_beg_time + pt.offset_time * 1e-3
         //* 1e-3
+        pt_time = LidarMeasures.lidar_frame_beg_time + pt.offset_time * 1e-3;
+        
         PoseInterp<NavStated>(
-            LidarMeasures.lidar_frame_beg_time + pt.offset_time * 1e-3 , imu_states_, [](const NavStated &s) { return s.timestamp_; },
+            pt_time , imu_states_, [](const NavStated &s) { return s.timestamp_; },
             [](const NavStated &s) { return s.GetSE3(); }, Ti, match);
 
         Eigen::Vector3d pi = ToVec3d(pt);
         Eigen::Vector3d p_compensate = TIL_.inverse() * T_end.inverse() * Ti * TIL_ * pi;
-        
+        // ROS_INFO("[ProcessLidar]--------->Undistort 3");
         pt.x = p_compensate(0);
         pt.y = p_compensate(1);
         pt.z = p_compensate(2);
 
     });
-
+    // LidarMeasures.last_lio_update_time = pt_time;
+    // ROS_INFO("[ProcessLidar]--------->pt_time= %.lf",pt_time);
+    // ROS_INFO("[ProcessLidar]--------->Undistort 4");
     scan_undistort_ = cloud;
     // TODO: 需要解决scan_undistort_、cloud数据类型不匹配的问题；
 
@@ -647,7 +694,7 @@ void LIO::Align()
     }
 
     // 后续的scan，使用NDT配合pose进行更新
-    LOG(INFO) << "=== frame " << frame_num_;
+    // LOG(INFO) << "=== frame " << frame_num_;
 
     ndt_.SetSource(current_scan_filter);
     ieskf_.UpdateUsingCustomObserve([this](const SE3 &input_pose, Mat18d &HTVH, Vec18d &HTVr) {
@@ -660,7 +707,7 @@ void LIO::Align()
     SE3 current_pose = ieskf_.GetNominalSE3();
     SE3 delta_pose = last_pose_.inverse() * current_pose;
 
-    CloudPtr current_scan_world(new PointCloudType);
+    // CloudPtr current_scan_world(new PointCloudType);
     // pcl::PointCloud<pcl::PointXYZINormal>::Ptr current_scan_world{new pcl::PointXYZINormal};
     pcl::transformPointCloud(*current_scan_filter, *current_scan_world, current_pose.matrix());
     pcl::transformPointCloud(*scan_undistort_, *scan_undistort_, current_pose.matrix());
@@ -706,9 +753,12 @@ void LIO::ProcessLidar()
     if (imu_need_init_) {
         return;
     }
+    // ROS_INFO("[ProcessLidar]--------->imu_need_init_");
     // lildar undistort
     Undistort();
+    // ROS_INFO("[ProcessLidar]--------->Undistort");
     Align();
+    // ROS_INFO("[ProcessLidar]--------->Align");
     return;
 }
 
@@ -789,8 +839,8 @@ void LIO::publish_mavros(const ros::Publisher &mavros_pose_publisher)
 
 void LIO::ProcessCamera()
 {
-    if(lidar_buffer_ndt.empty() && lidar_en) return false;
-    if(img_buffer.empty() && img_en) return false;
+    if(lidar_buffer_ndt.empty() && lidar_en) return;
+    if(img_buffer.empty() && img_en) return;
 
     if (pcl_wait_save->empty() || (pcl_wait_save == nullptr)) 
     {
@@ -811,6 +861,37 @@ void LIO::initcamera()
 void LIO::handleVIO()
 {
     if (image_get.empty()) return;
+    
+    // cv::Mat left_img = cv::imread(left_file, 0);   
+    // cv::Mat disparity_img = cv::imread(disparity_file, 0);
+
+    // // let's randomly pick pixels in the first image and generate some 3d points in the first image's frame
+    // cv::RNG rng;
+    // int nPoints = 2000;
+    // int boarder = 20;
+    // VecVector2d pixels_ref;
+    // vector<double> depth_ref;
+
+    // // generate pixels in ref and load depth data
+    // for (int i = 0; i < nPoints; i++) {
+    //     int x = rng.uniform(boarder, left_img.cols - boarder);  // don't pick pixels close to boarder
+    //     int y = rng.uniform(boarder, left_img.rows - boarder);  // don't pick pixels close to boarder
+    //     int disparity = disparity_img.at<uchar>(y, x);
+    //     double depth = fx * baseline / disparity; // you know this is disparity to depth
+    //     depth_ref.push_back(depth);
+    //     pixels_ref.push_back(Eigen::Vector2d(x, y));
+    // }
+
+    // // estimates 01~05.png's pose using this information
+    // Sophus::SE3 T_cur_ref;
+
+    // for (int i = 1; i < 6; i++) {  // 1~10
+    //     cv::Mat img = cv::imread((fmt_others % i).str(), 0);
+    //     // try single layer by uncomment this line
+    //     DirectPoseEstimationSingleLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref);
+    //     // DirectPoseEstimationMultiLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref);
+    // }
+    // return 0;
 
     
 }
@@ -824,9 +905,10 @@ void LIO::run()
     {
         // Process any callbacks
         ros::spinOnce();
+        auto time1 = std::chrono::high_resolution_clock::now(); 
         if (!sync_packages(LidarMeasures))  
         {   
-            // ROS_INFO("--------------------------------------------");
+            ROS_INFO("--------------------------------------------1");
             // // std::cout <<"imu: " << LidarMeasures.measures.back().imu.back()->header.stamp.toSec() << std::endl;
             // ROS_INFO("[LidarMeasures] LidarMeasures measures.size: %ld",LidarMeasures.measures.size());
             // ROS_INFO("[LidarMeasures] LidarMeasures lidar_frame_end_time: %.6f",LidarMeasures.lidar_frame_end_time);
@@ -836,14 +918,27 @@ void LIO::run()
             rate.sleep();
             continue;
         }
+        ROS_INFO("--------------------------------------------2.2");
         handleFirstFrame();
-        
+        ROS_INFO("--------------------------------------------2");
+        auto time2 = std::chrono::high_resolution_clock::now(); 
+
         ProcessIMU();
+        ROS_INFO("--------------------------------------------3");
         
         ProcessLidar();
 
         ProcessCamera();
+        auto time3 = std::chrono::high_resolution_clock::now(); 
+        std::chrono::duration<double> duration_time = time2 - time1;
+
+        double duration_time_seconds = duration_time.count(); 
+        std::chrono::duration<double> duration_time2 = time3 - time2;
+
+        double duration_time_seconds2 = duration_time2.count(); 
         
+        ROS_INFO("[sync_packages mode] time: %.06lf ms", duration_time_seconds * 1000);
+        ROS_INFO("[ProcessIMU and ProcessLidar mode] time: %.06lf ms", duration_time_seconds2 * 1000);
     }
     savePCD();
     ros::spin();

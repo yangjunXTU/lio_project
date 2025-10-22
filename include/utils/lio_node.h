@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-12 02:03:20
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-16 06:42:12
+ * @LastEditTime: 2025-10-21 07:28:46
  * @FilePath: /lio_project_wk/src/lio_project/src/lio_node.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -63,6 +63,7 @@ private:
     CloudPtr current_scan_ = nullptr;
     CloudPtr current_scan_w = nullptr;
     CloudPtr pcl_wait_save{new PointCloudType};
+    CloudPtr current_scan_world{new PointCloudType};
     // pcl::PointCloud<pcl::PointXYZINormal>::Ptr pcl_wait_save{new pcl::PointXYZINormal};
     bool flg_first_scan_ = true;
     int frame_num_ = 0;
@@ -95,6 +96,8 @@ public:
 
     int img_en = 1, lidar_en = 1;
     SLAM_MODE slam_mode_;
+
+    
 
     bool imu_need_init_ = true;
     

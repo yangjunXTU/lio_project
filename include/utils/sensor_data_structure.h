@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-14 07:01:51
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-16 07:34:58
+ * @LastEditTime: 2025-10-17 02:59:47
  * @FilePath: /lio_project_wk/src/lio_project/include/utils/imu.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -20,6 +20,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/impl/pcl_base.hpp>
+#include <opencv2/opencv.hpp>
 
 using namespace std;
 
@@ -83,7 +84,9 @@ struct LidarMeasureGroup
   //PointCloudXYZI::Ptr lidar;
   FullPointCloudType::Ptr lidar;
   //PointCloudXYZI::Ptr pcl_proc_cur;
-  FullPointCloudType::Ptr pcl_proc_cur_ndt;
+  // FullPointCloudType::Ptr pcl_proc_cur_ndt;
+  FullPointCloudType::Ptr pcl_proc_cur;
+  FullPointCloudType::Ptr pcl_proc_next;
   //PointCloudXYZI::Ptr pcl_proc_next;
   deque<struct MeasureGroup> measures;
 //   EKF_STATE lio_vio_flg;
@@ -96,8 +99,8 @@ struct LidarMeasureGroup
     last_lio_update_time = -1.0;
     // lio_vio_flg = WAIT;
     // this->lidar.reset(new PointCloudXYZI());
-    // this->pcl_proc_cur.reset(new PointCloudXYZI());
-    // this->pcl_proc_next.reset(new PointCloudXYZI());
+    this->pcl_proc_cur.reset(new FullPointCloudType());
+    this->pcl_proc_next.reset(new FullPointCloudType());
     this->measures.clear();
     lidar_scan_index_now = 0;
     last_lio_update_time = -1.0;
