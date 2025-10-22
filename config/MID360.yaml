@@ -4,7 +4,7 @@ common:
   imu_topic: "/livox/imu_192_168_1_164"
   #lidar_topic: "/livox/lidar"
   #imu_topic: "/livox/imu"
-  img_en: 0
+  img_en: 1
   lidar_en: 1
 
 extrin_calib:
