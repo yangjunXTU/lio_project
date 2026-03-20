@@ -97,7 +97,6 @@ private:
     // FullCloudPtr scan_undistort_trans(new FullPointCloudType);
     /// NDT数据
     CloudPtr current_scan_ = nullptr;
-    CloudPtr current_scan_w = nullptr;
     CloudPtr pcl_wait_save{new PointCloudType};
     CloudPtr current_scan_world{new PointCloudType};
     UiCloudPtr map_point_rgb_{new UiPointCloudType};
@@ -149,28 +148,21 @@ public:
 
     bool imu_need_init_ = true;
     
-    std::deque< sensor_msgs::CompressedImageConstPtr > g_received_compressed_img_msg;
     ros::NodeHandle nh;
-    ros::Subscriber sub_depth_img_compLz4,sub_depth_img_comp, sub_img_comp, sub_pcl, sub_imu,sub_depth_img, sub_img,sub_camera_odom,sub_apriltag;
-    ros::Publisher pub_depth_img_comp, pub_img_comp,pub_depth_img, pub_img,pub_img_comp_info;
-    ros::Publisher pub_pcl,pub_pcl_un,pub_pcl_ndt,pub_camera_odom,pub_path;
+    ros::Subscriber sub_pcl, sub_imu, sub_img;
+    ros::Publisher pub_img;
+    ros::Publisher pub_pcl,pub_pcl_un,pub_pcl_ndt;
     ros::Publisher pub_img_with_point;
     ros::Publisher pub_map_point_rgb_, pub_map_semantic_;
     ros::Publisher pubOdomAftMapped,pubPath,mavros_pose_publisher;
     // nav_msgs::Path path;
 
-    double  img_rec_time;
-    cv::Mat image_get;
-    std::string LiDAR_pointcloud_topic, IMU_topic, IMAGE_depth_compressed, IMAGE_color_compressed,IMAGE_depth_compressedLz4;
-    std::string IMAGE_color,IMAGE_depth,CAMERA_odom;
-
-    pcl::PointCloud<pcl::PointXYZI> output_cloud;
+    std::string LiDAR_pointcloud_topic, IMU_topic, IMAGE_color;
 
     LidarMeasureGroup LidarMeasures;
 
     nav_msgs::Path path;
     nav_msgs::Odometry odomAftMapped;
-    geometry_msgs::Quaternion geoQuat;
     geometry_msgs::PoseStamped msg_body_pose;
 
     //imu参数配置

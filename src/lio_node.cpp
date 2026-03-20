@@ -266,18 +266,12 @@ LIO::LIO(/* args */)
         }
 
     pub_img = nh.advertise<sensor_msgs::Image>("/pub_img",1000);
-    pub_depth_img = nh.advertise<sensor_msgs::Image>("/pub_depth_img",1000);
-    pub_img_comp = nh.advertise<sensor_msgs::Image>("/pub_img/image_raw",1000);
-    pub_img_comp_info = nh.advertise<sensor_msgs::CameraInfo>("/pub_img/camera_info",1000);
     pub_img_with_point = nh.advertise<sensor_msgs::Image>("/pub_img_with_point", 1000);
-    pub_depth_img_comp = nh.advertise<sensor_msgs::Image>("/pub_depth_img_comp",1000);
     pub_pcl = nh.advertise<sensor_msgs::PointCloud2>("/mid360/orin",1000);
     pub_pcl_un = nh.advertise<sensor_msgs::PointCloud2>("/mid360/undistort",1000);
     pub_pcl_ndt = nh.advertise<sensor_msgs::PointCloud2>("/mid360/ndt_clod",1000);
     pub_map_point_rgb_ = nh.advertise<sensor_msgs::PointCloud2>("/map/map_point_rgb", 1000);
     pub_map_semantic_ = nh.advertise<sensor_msgs::PointCloud2>("/vio/map_semantic", 1000);
-    pub_camera_odom = nh.advertise<nav_msgs::Odometry>("/pub_camera_odom",1000);
-    pub_path = nh.advertise<nav_msgs::Path>("/pub_apriltag_path",1000);
     pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_map", 10);
     pubPath = nh.advertise<nav_msgs::Path>("/path", 10);
     mavros_pose_publisher = nh.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 10);

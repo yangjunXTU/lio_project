@@ -14,7 +14,6 @@ set(CMAKE_BUILD_TYPE Release)
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
-  message_generation
   roscpp
   rospy
   std_msgs
@@ -67,33 +66,6 @@ find_package(TBB REQUIRED)
 ##   * uncomment the generate_messages entry below
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
-## Generate messages in the 'msg' folder
- add_message_files(
-   FILES
-   Pose.msg
- )
-
-## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
-
-## Generate actions in the 'action' folder
-# add_action_files(
-#   FILES
-#   Action1.action
-#   Action2.action
-# )
-
-## Generate added messages and services with any dependencies listed here
- generate_messages(
-   DEPENDENCIES
-   nav_msgs   
-   std_msgs
- )
-
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
 ################################################
@@ -126,7 +98,7 @@ find_package(TBB REQUIRED)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES msg_vis
-  CATKIN_DEPENDS cv_bridge message_generation nav_msgs roscpp roslz4 rospy std_msgs geometry_msgs message_runtime image_transport
+  CATKIN_DEPENDS cv_bridge nav_msgs roscpp roslz4 rospy std_msgs geometry_msgs image_transport
 #  DEPENDS system_lib
   DEPENDS EIGEN3 PCL OpenCV Sophus glog
 )

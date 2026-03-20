@@ -51,7 +51,6 @@
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>cv_bridge</build_depend>
   <build_depend>image_transport</build_depend>
-  <build_depend>message_generation</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>roslz4</build_depend>
@@ -64,7 +63,6 @@
 
   <build_export_depend>cv_bridge</build_export_depend>
   <build_export_depend>image_transport</build_export_depend>
-  <build_export_depend>message_generation</build_export_depend>
   <build_export_depend>nav_msgs</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>roslz4</build_export_depend>
@@ -77,10 +75,8 @@
   <exec_depend>roslz4</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>message_runtime</exec_depend>
   <exec_depend>livox_ros_driver2</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>message_runtime</exec_depend>
   <exec_depend>image_transport</exec_depend> 
   <exec_depend>libglog-dev</exec_depend>
 
