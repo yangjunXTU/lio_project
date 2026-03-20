@@ -7,10 +7,8 @@
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
 #include <ros/ros.h>
-#include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 #include <livox_ros_driver2/CustomMsg.h>
-#include <execution>
 #include<nav_msgs/Path.h>
 #include<nav_msgs/Odometry.h>
 #include <pcl/common/transforms.h>
@@ -34,7 +32,6 @@ using namespace cv;
 using namespace std;
 using namespace sad;
 #define IS_VALID( a ) ( ( abs( a ) > 1e8 ) ? true : false )
-#define ANSI_COLOR_BLUE_BOLD "\x1b[1;34m"
 
 enum SLAM_MODE
 {
@@ -90,8 +87,6 @@ private:
     SE3 T_l_c;  // camera与lidar之间的外参  C -> L
     FullCloudPtr scan_undistort_;
     
-    int num_scans_ = 4;                          // 扫描线数mid360
-    int point_filter_num_ = 1;                   // 跳点
     CloudPtr current_scan_ = nullptr;
     CloudPtr pcl_wait_save{new PointCloudType};
     CloudPtr current_scan_world{new PointCloudType};
