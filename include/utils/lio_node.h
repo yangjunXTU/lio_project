@@ -86,8 +86,10 @@ private:
     SE3 T_i_l;  // Lidar与IMU之间外参  L -> I
     SE3 T_l_c;  // camera与lidar之间的外参  C -> L
     FullCloudPtr scan_undistort_;
+    FullCloudPtr scan_undistort_trans_{new FullPointCloudType};
     
     CloudPtr current_scan_ = nullptr;
+    CloudPtr current_scan_filter_{new PointCloudType};
     CloudPtr pcl_wait_save{new PointCloudType};
     CloudPtr current_scan_world{new PointCloudType};
     UiCloudPtr map_point_rgb_{new UiPointCloudType};
@@ -150,6 +152,10 @@ public:
     nav_msgs::Path path;
     nav_msgs::Odometry odomAftMapped;
     geometry_msgs::PoseStamped msg_body_pose;
+    sensor_msgs::PointCloud2 pub_pcl_msg_;
+    sensor_msgs::PointCloud2 pub_pcl_un_msg_;
+    sensor_msgs::PointCloud2 pub_pcl_ndt_msg_;
+    cv_bridge::CvImage debug_img_msg_;
 
     double init_time_seconds = 5.0;     // 静止时间 10
     int init_imu_queue_max_size = 600;  // 初始化IMU队列最大长度 2000

@@ -59,7 +59,9 @@ void VIO::processFrame(cv::Mat &img, SE3 &T_w_i_meas)
     visual_measurement_ready_ = false;
     resetTrackingStats();
     
-    if (img.empty()) printf("[ VIO ] Empty Image!\n");
+    if (img.empty()) {
+        ROS_WARN_THROTTLE(1.0, "[VIO] Empty Image!");
+    }
     // img_rgb = img.clone();
     // img_cp = img.clone();
     
@@ -68,11 +70,8 @@ void VIO::processFrame(cv::Mat &img, SE3 &T_w_i_meas)
     new_frame_.reset(new Frame(img));
     new_frame_->BuildPyramid(pyr_levels_);
     // new_frame_->T_c_w = nav_state_w_i_ptr_->GetSE3();
-    ROS_INFO("--------------------------------------------7");
     setCameraPoseFromNavState(*nav_state_w_i_ptr_);
-    ROS_INFO("--------------------------------------------8");
     buildVisibleMapPoints(*new_frame_);
-    ROS_INFO("--------------------------------------------9");
     if(flg_first_scan_vio)
     {
       last_frame_ = new_frame_;
@@ -82,20 +81,20 @@ void VIO::processFrame(cv::Mat &img, SE3 &T_w_i_meas)
       return;
     }
     if (!last_frame_ || last_frame_->pts.empty() || new_frame_->pts.empty()) {
-      ROS_WARN("[VIO] skipped frame because reference/current visual points are insufficient. ref=%zu cur=%zu",
-               last_frame_ ? last_frame_->pts.size() : 0, new_frame_->pts.size());
+      ROS_WARN_THROTTLE(1.0, "[VIO] skipped frame because reference/current visual points are insufficient. ref=%zu cur=%zu",
+                        last_frame_ ? last_frame_->pts.size() : 0, new_frame_->pts.size());
       visual_measurement_ready_ = false;
       return;
     }
     stateEstimate();
-    ROS_INFO("--------------------------------------------10");
     if (!new_frame_) {
         ROS_ERROR("new_frame_ is null!");
         return;
     }
     T_w_i_meas = new_frame_->T_w_i_meas;
     visual_measurement_ready_ = true;
-    ROS_INFO("get {%.d} frame, this frame id = {%d} ;", new_frame_->frame_counter_,new_frame_->id_);
+    ROS_DEBUG_THROTTLE(1.0, "get {%d} frame, this frame id = {%d} ;",
+                       new_frame_->frame_counter_, new_frame_->id_);
 }
 
 void VIO::setImuToLidarExtrinsic(const Vec3d &transl, const Mat3d &rot)
@@ -352,7 +351,7 @@ void VIO::buildVisibleMapPoints(Frame &new_frame)
     new_frame.pts.push_back(candidate.point);
   }
   tracking_stats_.selected_points = static_cast<int>(new_frame.pts.size());
-  ROS_INFO("new_frame.pts.size = %ld",new_frame.pts.size());
+  ROS_DEBUG_THROTTLE(1.0, "new_frame.pts.size = %ld", new_frame.pts.size());
 
   // drawimg();
   
@@ -506,15 +505,17 @@ void VIO::ComputeResidualAndJacobians(const SE3 &T_w_i, Mat18d &HTVH, Vec18d &HT
   tracking_stats_.promote_reference = ShouldPromoteReferenceFrame();
 
   if (tracking_stats_.update_accepted) {
-    ROS_INFO("[VIO] accepted: valid=%d inlier_ratio=%.3f mean_abs=%.3f dtrans=%.4f drot=%.3f deg promote=%d",
-             tracking_stats_.valid_residuals, tracking_stats_.inlier_ratio, tracking_stats_.mean_abs_residual,
-             tracking_stats_.update_translation_norm, tracking_stats_.update_rotation_deg,
-             tracking_stats_.promote_reference);
+    ROS_DEBUG_THROTTLE(1.0,
+                       "[VIO] accepted: valid=%d inlier_ratio=%.3f mean_abs=%.3f dtrans=%.4f drot=%.3f deg promote=%d",
+                       tracking_stats_.valid_residuals, tracking_stats_.inlier_ratio, tracking_stats_.mean_abs_residual,
+                       tracking_stats_.update_translation_norm, tracking_stats_.update_rotation_deg,
+                       tracking_stats_.promote_reference);
   } else {
-    ROS_WARN("[VIO] rejected: selected=%d valid=%d inlier_ratio=%.3f mean_abs=%.3f dtrans=%.4f drot=%.3f deg",
-             tracking_stats_.selected_points, tracking_stats_.valid_residuals, tracking_stats_.inlier_ratio,
-             tracking_stats_.mean_abs_residual, tracking_stats_.update_translation_norm,
-             tracking_stats_.update_rotation_deg);
+    ROS_WARN_THROTTLE(1.0,
+                      "[VIO] rejected: selected=%d valid=%d inlier_ratio=%.3f mean_abs=%.3f dtrans=%.4f drot=%.3f deg",
+                      tracking_stats_.selected_points, tracking_stats_.valid_residuals, tracking_stats_.inlier_ratio,
+                      tracking_stats_.mean_abs_residual, tracking_stats_.update_translation_norm,
+                      tracking_stats_.update_rotation_deg);
     HTVH.setZero();
     HTVr.setZero();
   }
@@ -680,7 +681,7 @@ void VIO::DirectPoseEstimationSingleLayer(
   cout << "T21 = \n" << T21.matrix() << endl;
   auto t2 = chrono::steady_clock::now();
   auto time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-  ROS_INFO("direct method for single layer: %f",time_used.count());
+  ROS_DEBUG_THROTTLE(1.0, "direct method for single layer: %f", time_used.count());
 
 }
 

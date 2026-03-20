@@ -360,8 +360,7 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
 
     }
 
-    FullCloudPtr ptr_ndt(new FullPointCloudType());
-    *ptr_ndt = pl_full;
+    FullCloudPtr ptr_ndt(new FullPointCloudType(std::move(pl_full)));
 
     if (ptr_ndt->empty()) {
             return;
@@ -373,12 +372,10 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
     last_timestamp_lidar = msg->header.stamp.toSec();
 
     mtx_buffer.unlock();
-    sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg( pl_full, output );
-    
-    output.header.frame_id = "map";
-    output.header.stamp = msg->header.stamp;
-    pub_pcl.publish( output );
+    pcl::toROSMsg(*ptr_ndt, pub_pcl_msg_);
+    pub_pcl_msg_.header.frame_id = "map";
+    pub_pcl_msg_.header.stamp = msg->header.stamp;
+    pub_pcl.publish(pub_pcl_msg_);
     
 }
 
@@ -564,13 +561,14 @@ ROS_INFO("-----------ONLY_LIO MODE!!! 2");
         {
             if (imu_buffer.front()->timestamp_ > m.lio_time) break;
 
-            if (imu_buffer.front()->timestamp_ > meas.last_lio_update_time) m.imu.push_back(imu_buffer.front());
+            if (imu_buffer.front()->timestamp_ > meas.last_lio_update_time) {
+                m.imu.push_back(imu_buffer.front());
+            }
 
             imu_buffer.pop_front();
-
         }
         mtx_buffer.unlock();
-        ROS_INFO("-----------LIVO MODE  add imu");
+        ROS_DEBUG_THROTTLE(1.0, "LIVO sync: added IMU measurements");
 
         *(meas.pcl_proc_cur) = *(meas.pcl_proc_next);
         // ROS_INFO("-----------LIVO MODE  add lidar1");
@@ -590,40 +588,36 @@ ROS_INFO("-----------ONLY_LIO MODE!!! 2");
                 // 处理空队列情况
                 break; // 或其他适当的错误处理
             }
+            FullCloudPtr pcl_cloud;
+            double frame_header_time = 0.0;
             mtx_buffer.lock();
-            // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 0");
             if (lid_header_time_buffer.front() > m.lio_time){
-                mtx_buffer.unlock();break;
-            } 
-            // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 1");
-            auto pcl(lidar_buffer_ndt.front()->points);
-            // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 2");
-            double frame_header_time(lid_header_time_buffer.front());
-            // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 3");
-            double max_offs_time_ms = (m.lio_time - frame_header_time) * 1000.0f;
-            // ROS_INFO("[sync]--------->max_offs_time_ms= %.06lf",max_offs_time_ms);
-            mtx_buffer.unlock();
-
-            for (int i = 0; i < pcl.size(); i++)
-            {
-            auto pt = pcl[i];
-            if (pcl[i].offset_time < max_offs_time_ms)
-            {
-                pt.offset_time += (frame_header_time - meas.last_lio_update_time) * 1000.0f;
-                // pt.offset_time = pt.curvature / double(1000);
-                meas.pcl_proc_cur->points.push_back(pt);
+                mtx_buffer.unlock();
+                break;
             }
-            else
-            {
-                pt.offset_time += (frame_header_time - m.lio_time) * 1000.0f;
-                // pt.offset_time = pt.curvature / double(1000);
-                meas.pcl_proc_next->points.push_back(pt);
-            }
-            }
-            mtx_buffer.lock();
+            pcl_cloud = lidar_buffer_ndt.front();
+            frame_header_time = lid_header_time_buffer.front();
             lidar_buffer_ndt.pop_front();
             lid_header_time_buffer.pop_front();
             mtx_buffer.unlock();
+
+            const auto& pcl = pcl_cloud->points;
+            const double max_offs_time_ms = (m.lio_time - frame_header_time) * 1000.0f;
+
+            for (int i = 0; i < pcl.size(); i++)
+            {
+                auto pt = pcl[i];
+                if (pcl[i].offset_time < max_offs_time_ms)
+                {
+                    pt.offset_time += (frame_header_time - meas.last_lio_update_time) * 1000.0f;
+                    meas.pcl_proc_cur->points.push_back(pt);
+                }
+                else
+                {
+                    pt.offset_time += (frame_header_time - m.lio_time) * 1000.0f;
+                    meas.pcl_proc_next->points.push_back(pt);
+                }
+            }
         }
         
         // ROS_INFO("[sync]--------->pt.offset_time= %.06lf",meas.pcl_proc_cur->points.back().offset_time);
@@ -643,7 +637,7 @@ ROS_INFO("-----------ONLY_LIO MODE!!! 2");
         m.vio_time = img_capture_time;
         // ROS_INFO("-----------while (!lidar_buffer_ndt.empty())---- 7");
         m.img = img_buffer.front();
-        ROS_INFO("-----------LIVO MODE  add camera");
+        ROS_DEBUG_THROTTLE(1.0, "LIVO sync: added camera frame");
 
         mtx_buffer.lock();
         img_buffer.pop_front();
@@ -679,11 +673,11 @@ void LIO::handleFirstFrame()
 
 void LIO::ProcessIMU()
 {
-    ROS_INFO("ProcessIMU....");
+    ROS_DEBUG_THROTTLE(1.0, "ProcessIMU running");
     // imu init
     if (imu_need_init_) {
         // 初始化IMU系统
-        ROS_INFO("start init---->");
+        ROS_DEBUG_THROTTLE(1.0, "IMU initialization in progress");
         TryInitIMU();
         return;
     }
@@ -697,7 +691,8 @@ void LIO::ProcessIMU()
         ieskf_.Predict(*imu);
         imu_states_.emplace_back(ieskf_.GetNominalState());
     }
-    ROS_INFO("imu_states_: x=%.3f,y=%.3f,z=%.3f", imu_states_.back().p_[0],imu_states_.back().p_[1],imu_states_.back().p_[2]);
+    ROS_DEBUG_THROTTLE(1.0, "imu_states_: x=%.3f,y=%.3f,z=%.3f",
+                       imu_states_.back().p_[0], imu_states_.back().p_[1], imu_states_.back().p_[2]);
 }
 
 void LIO::TryInitIMU()
@@ -767,9 +762,9 @@ void LIO::Undistort()
 void LIO::Align()
 {
     if (scan_undistort_->empty()) return;
-    FullCloudPtr scan_undistort_trans(new FullPointCloudType);
-    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_trans, T_i_l.matrix().cast<float>());
-    scan_undistort_ = scan_undistort_trans;
+    scan_undistort_trans_->clear();
+    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_trans_, T_i_l.matrix().cast<float>());
+    scan_undistort_ = scan_undistort_trans_;
     
     current_scan_ = ConvertToCloud<FullPointType>(scan_undistort_);
 
@@ -778,8 +773,8 @@ void LIO::Align()
     voxel.setLeafSize(0.5, 0.5, 0.5);
     voxel.setInputCloud(current_scan_);
 
-    CloudPtr current_scan_filter(new PointCloudType);
-    voxel.filter(*current_scan_filter);
+    current_scan_filter_->clear();
+    voxel.filter(*current_scan_filter_);
 
     if (flg_first_scan_lio) {
         ndt_.AddCloud(current_scan_);
@@ -791,7 +786,7 @@ void LIO::Align()
     // 后续的scan，使用NDT配合pose进行更新
     // LOG(INFO) << "=== frame " << frame_num_;
 
-    ndt_.SetSource(current_scan_filter);
+    ndt_.SetSource(current_scan_filter_);
     ieskf_.UpdateUsingCustomObserve([this](const SE3 &input_pose, Mat18d &HTVH, Vec18d &HTVr) {
         ndt_.ComputeResidualAndJacobians(input_pose, HTVH, HTVr);
     });
@@ -804,16 +799,13 @@ void LIO::Align()
     
     // CloudPtr current_scan_world(new PointCloudType);
     // pcl::PointCloud<pcl::PointXYZINormal>::Ptr current_scan_world{new pcl::PointXYZINormal};
-    pcl::transformPointCloud(*current_scan_filter, *current_scan_world, T_w_i.matrix());
+    current_scan_world->clear();
+    pcl::transformPointCloud(*current_scan_filter_, *current_scan_world, T_w_i.matrix());
     pcl::transformPointCloud(*scan_undistort_, *scan_undistort_, T_w_i.matrix());
 
-    sensor_msgs::PointCloud2 output1;
-    pcl::toROSMsg( *scan_undistort_, output1 );
-    output1.header.frame_id = "map";
-    // output.header.stamp = ros::Time::fromSec(LidarMeasures.lidar_frame_end_time);
-    
-    // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
-    pub_pcl_un.publish( output1 );
+    pcl::toROSMsg(*scan_undistort_, pub_pcl_un_msg_);
+    pub_pcl_un_msg_.header.frame_id = "map";
+    pub_pcl_un.publish(pub_pcl_un_msg_);
 
     *pcl_wait_save += *current_scan_world;
     vio_manager->vio_scan_world = current_scan_world;
@@ -848,13 +840,9 @@ void LIO::Align()
     publish_mavros(mavros_pose_publisher);
     // pcl::transformPointCloud(*current_scan_filter, *current_scan_w, current_pose.matrix());
 
-    sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg( *current_scan_world, output );
-    output.header.frame_id = "map";
-    // output.header.stamp = ros::Time::fromSec(LidarMeasures.lidar_frame_end_time);
-    
-    // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
-    pub_pcl_ndt.publish( output );
+    pcl::toROSMsg(*current_scan_world, pub_pcl_ndt_msg_);
+    pub_pcl_ndt_msg_.header.frame_id = "map";
+    pub_pcl_ndt.publish(pub_pcl_ndt_msg_);
 
     frame_num_++;
     return;
@@ -1173,10 +1161,9 @@ void LIO::ProcessCamera()
     // ROS_INFO("--------------------------------------------5");
     if (pcl_wait_save->empty() || (pcl_wait_save == nullptr)) 
     {
-        std::cout << "[ VIO ] No point!!!" << std::endl;
+        ROS_DEBUG_THROTTLE(1.0, "[VIO] No point!!!");
         return;
     }
-    ROS_INFO("--------------------------------------------6");
     initcamera();
     
     handleVIO();
@@ -1205,24 +1192,22 @@ void LIO::handleVIO()
         vio_manager->ComputeResidualAndJacobians(input_pose, HTVH, HTVr);
     });
     const auto& tracking_stats = vio_manager->trackingStats();
-    ROS_INFO("[VIO] frame stats: candidates=%d selected=%d valid=%d inliers=%d mean_abs=%.3f accepted=%d promote=%d",
-             tracking_stats.candidate_points, tracking_stats.selected_points, tracking_stats.valid_residuals,
-             tracking_stats.inlier_residuals, tracking_stats.mean_abs_residual,
-             tracking_stats.update_accepted, tracking_stats.promote_reference);
+    ROS_DEBUG_THROTTLE(1.0,
+                       "[VIO] frame stats: candidates=%d selected=%d valid=%d inliers=%d mean_abs=%.3f accepted=%d promote=%d",
+                       tracking_stats.candidate_points, tracking_stats.selected_points, tracking_stats.valid_residuals,
+                       tracking_stats.inlier_residuals, tracking_stats.mean_abs_residual,
+                       tracking_stats.update_accepted, tracking_stats.promote_reference);
     if (tracking_stats.promote_reference) {
         vio_manager->finalizeFrame();
     } else if (!tracking_stats.update_accepted) {
         vio_manager->visual_measurement_ready_ = false;
     }
 
-    cv_bridge::CvImage out_msg;
-    out_msg.header.stamp = ros::Time::now();               // Same timestamp and tf frame as input image
-    out_msg.encoding = sensor_msgs::image_encodings::MONO8; // Or whatever BGR8
-    out_msg.image = vio_manager->new_frame_->img_;                                   // Your cv::Mat
-    out_msg.header.frame_id = "map";
-
-    // std::cout<<"color frame id : "<< out_msg.header.frame_id << endl;
-    pub_img.publish( out_msg );
+    debug_img_msg_.header.stamp = ros::Time::now();
+    debug_img_msg_.encoding = sensor_msgs::image_encodings::MONO8;
+    debug_img_msg_.image = vio_manager->new_frame_->img_;
+    debug_img_msg_.header.frame_id = "map";
+    pub_img.publish(debug_img_msg_.toImageMsg());
     publishImageWithProjectedPoints();
     
 }
@@ -1268,8 +1253,8 @@ void LIO::run()
 
         double duration_time_seconds2 = duration_time2.count(); 
         
-        ROS_INFO("[sync_packages mode] time: %.06lf ms", duration_time_seconds * 1000);
-        ROS_INFO("[ProcessIMU and ProcessLidar mode] time: %.06lf ms", duration_time_seconds2 * 1000);
+        ROS_DEBUG_THROTTLE(1.0, "[sync_packages mode] time: %.06lf ms", duration_time_seconds * 1000);
+        ROS_DEBUG_THROTTLE(1.0, "[ProcessIMU and ProcessLidar mode] time: %.06lf ms", duration_time_seconds2 * 1000);
     }
     savePCD();
 }

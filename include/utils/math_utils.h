@@ -448,7 +448,7 @@ template <typename T, typename C, typename FT, typename FP>
 inline bool PoseInterp(double query_time, C&& data, FT&& take_time_func, FP&& take_pose_func, SE3& result,
                        T& best_match, float time_th = 0.5) {
     if (data.empty()) {
-        LOG(INFO) << "cannot interp because data is empty. ";
+        LOG_EVERY_N(INFO, 200) << "cannot interp because data is empty.";
         return false;
     }
 
