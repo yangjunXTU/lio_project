@@ -66,3 +66,13 @@ eskf:
 # Lidar:
 
    
+pcd_save:
+  # Save geometry map as all_raw_points.pcd
+  save_lidar: false
+  # Save RGB map as all_rgb_points.pcd
+  save_rgb: true
+  # Relative or absolute directory for saved PCD files.
+  output_dir: "Log/PCD"
+  raw_filename: "all_raw_points.pcd"
+  rgb_filename: "all_rgb_points.pcd"
+  create_dir_if_missing: true

@@ -10,6 +10,7 @@
 #include"utils/lio_node.h"
 #include <stdexcept>
 #include <cmath>
+#include <filesystem>
 
 namespace {
 
@@ -154,6 +155,10 @@ bool LoadSemanticConfig(ros::NodeHandle& nh, SemanticConfig& semantic_config) {
 bool LoadPcdSaveConfig(ros::NodeHandle& nh, PcdSaveConfig& pcd_save_config) {
     nh.param<bool>("pcd_save/save_lidar", pcd_save_config.save_lidar, true);
     nh.param<bool>("pcd_save/save_rgb", pcd_save_config.save_rgb, false);
+    nh.param<std::string>("pcd_save/output_dir", pcd_save_config.output_dir, std::string("Log/PCD"));
+    nh.param<std::string>("pcd_save/raw_filename", pcd_save_config.raw_filename, std::string("all_raw_points.pcd"));
+    nh.param<std::string>("pcd_save/rgb_filename", pcd_save_config.rgb_filename, std::string("all_rgb_points.pcd"));
+    nh.param<bool>("pcd_save/create_dir_if_missing", pcd_save_config.create_dir_if_missing, true);
     return true;
 }
 
@@ -1162,18 +1167,34 @@ void LIO::savePCD()
         (!visual_enabled_ || !pcd_save_config_.save_rgb || !rgb_wait_save_ || rgb_wait_save_->empty())) {
         return;
     }
+
+    const std::filesystem::path output_dir = pcd_save_config_.output_dir.empty()
+        ? std::filesystem::path("Log/PCD")
+        : std::filesystem::path(pcd_save_config_.output_dir);
+    const std::filesystem::path raw_points_path = output_dir / pcd_save_config_.raw_filename;
+    const std::filesystem::path rgb_points_path = output_dir / pcd_save_config_.rgb_filename;
+
+    if (pcd_save_config_.create_dir_if_missing) {
+        std::error_code ec;
+        std::filesystem::create_directories(output_dir, ec);
+        if (ec) {
+            ROS_ERROR_STREAM("Failed to create PCD output directory: " << output_dir << ", error: " << ec.message());
+            return;
+        }
+    }
+
     pcl::PCDWriter pcd_writer;
-    std::string raw_points_dir = "/home/yangj/Robot/code/lio_project_wk/src/lio_project/Log/PCD/all_raw_points.pcd";
-    std::string rgb_points_dir = "/home/yangj/Robot/code/lio_project_wk/src/lio_project/Log/PCD/all_rgb_points.pcd";
     
     if (pcd_save_config_.save_lidar && pcl_wait_save && pcl_wait_save->size() > 0)
     {
-        pcd_writer.writeBinary(raw_points_dir, *pcl_wait_save);
-        std::cout << "Raw point cloud data saved to: " << raw_points_dir << ", with point count: " << pcl_wait_save->points.size() << std::endl;
+        pcd_writer.writeBinary(raw_points_path.string(), *pcl_wait_save);
+        std::cout << "Raw point cloud data saved to: " << raw_points_path
+                  << ", with point count: " << pcl_wait_save->points.size() << std::endl;
     }
     if (visual_enabled_ && pcd_save_config_.save_rgb && rgb_wait_save_ && rgb_wait_save_->size() > 0) {
-        pcd_writer.writeBinary(rgb_points_dir, *rgb_wait_save_);
-        std::cout << "RGB point cloud data saved to: " << rgb_points_dir << ", with point count: " << rgb_wait_save_->points.size() << std::endl;
+        pcd_writer.writeBinary(rgb_points_path.string(), *rgb_wait_save_);
+        std::cout << "RGB point cloud data saved to: " << rgb_points_path
+                  << ", with point count: " << rgb_wait_save_->points.size() << std::endl;
     }
     
 }

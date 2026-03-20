@@ -65,6 +65,10 @@ struct SemanticConfig {
 struct PcdSaveConfig {
     bool save_lidar = true;
     bool save_rgb = false;
+    std::string output_dir = "Log/PCD";
+    std::string raw_filename = "all_raw_points.pcd";
+    std::string rgb_filename = "all_rgb_points.pcd";
+    bool create_dir_if_missing = true;
 };
 
 struct DebugVisConfig {
