@@ -2,7 +2,7 @@
  * @Author: yangjun_d 295967654@qq.com
  * @Date: 2025-08-13 02:24:16
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-15 07:11:10
+ * @LastEditTime: 2025-10-29 08:38:17
  * @FilePath: /lio_project_wk/src/lio_project/src/iekf.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -307,18 +307,40 @@ bool IESKF<S>::ObserveSE3(const SE3& pose, double trans_noise, double ang_noise)
     Eigen::Matrix<S, 6, 18> H = Eigen::Matrix<S, 6, 18>::Zero();
     H.template block<3, 3>(0, 0) = Mat3T::Identity();  // P部分
     H.template block<3, 3>(3, 6) = Mat3T::Identity();  // R部分（3.66)
-
+    
     // 卡尔曼增益和更新过程
     Vec6d noise_vec;
     noise_vec << trans_noise, trans_noise, trans_noise, ang_noise, ang_noise, ang_noise;
-
     Mat6d V = noise_vec.asDiagonal();
-    Eigen::Matrix<S, 18, 6> K = cov_ * H.transpose() * (H * cov_ * H.transpose() + V).inverse();
 
+    Eigen::Matrix<S, 18, 6> K = cov_ * H.transpose() * (H * cov_ * H.transpose() + V).inverse();
+    
     // 更新x和cov
     Vec6d innov = Vec6d::Zero();
     innov.template head<3>() = (pose.translation() - p_);          // 平移部分
     innov.template tail<3>() = (R_.inverse() * pose.so3()).log();  // 旋转部分(3.67)
+    
+
+    //--------------------------------------------------------------------------------18*18
+    // Eigen::Matrix<S, 18, 18> H = Eigen::Matrix<S, 18, 18>::Identity();
+    // H.template block<3, 3>(0, 0) = Mat3T::Identity();  // P部分
+    // H.template block<3, 3>(6, 6) = Mat3T::Identity();  // R部分（3.66)
+
+    // Vec3d trans_noise_vec;
+    // Vec3d ang_noise_vec;
+    // trans_noise_vec << trans_noise, trans_noise, trans_noise;
+    // ang_noise_vec << ang_noise, ang_noise, ang_noise;
+
+    // Eigen::Matrix<S, 18, 18> V = Eigen::Matrix<S, 18, 18>::Zero();
+    // V.template block<3, 3>(0, 0) = trans_noise_vec.asDiagonal();  // P部分
+    // V.template block<3, 3>(6, 6) = ang_noise_vec.asDiagonal();  // R部分（3.66)
+
+    // Eigen::Matrix<S, 18, 18> K = cov_ * H.transpose() * (H * cov_ * H.transpose() + V).inverse();
+
+    // Eigen::Matrix<S, 18, 1> innov = Eigen::Matrix<S, 18, 1>::Zero();
+    // innov.template block<3, 1>(0, 0) = (pose.translation() - p_);
+    // innov.template block<3, 1>(6, 0) = (R_.inverse() * pose.so3()).log();
+    //--------------------------------------------------------------------------
 
     dx_ = K * innov;
     cov_ = (Mat18T::Identity() - K * H) * cov_;

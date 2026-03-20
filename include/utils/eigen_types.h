@@ -14,6 +14,9 @@
 #include "sophus/se2.h"
 #include "sophus/se3.h"
 
+// #define VEC_FROM_ARRAY(v) v[0], v[1], v[2]
+// #define MAT_FROM_ARRAY(v) v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8]
+
 using Vec2i = Eigen::Vector2i;
 using Vec3i = Eigen::Vector3i;
 //using Vec3b = Eigen::Matrix<char, 3, 1>;
@@ -44,6 +47,8 @@ using Mat3f = Eigen::Matrix3f;
 // using Mat5f = Eigen::Matrix<float, 5, 5>;
 using Mat6d = Eigen::Matrix<double, 6, 6>;
 using Mat6f = Eigen::Matrix<float, 6, 6>;
+using Mat26d =  Eigen::Matrix<double, 2, 6>;
+using Mat26f =  Eigen::Matrix<float, 2, 6>;
 using Mat9d = Eigen::Matrix<double, 9, 9>;
 using Mat96d = Eigen::Matrix<double, 9, 6>;
 // using Mat15d = Eigen::Matrix<double, 15, 15>;

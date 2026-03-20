@@ -1,0 +1,68 @@
+common:
+  img_topic: "/bot_rear/color/image_raw"
+  lidar_topic: "/livox/lidar"
+  imu_topic: "/livox/imu"
+  #lidar_topic: "/livox/lidar"
+  #imu_topic: "/livox/imu"
+  img_en: 0
+  lidar_en: 1
+
+extrin_calib:
+  # extrinsic_T: [0.04165, 0.02326, -0.0284]
+  extrinsic_T: [-0.011, -0.02329, 0.04412] # mid360 imuTolidar
+  extrinsic_R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+
+  Rcl: [-0.0167798,-0.999766,0.0136439,
+          0.005557,-0.0137388,-0.99989,
+          0.999844,-0.0167021,0.00578623]
+
+  Pcl: [-0.0270529, -0.0715923,  -0.120225]
+  
+camera:
+  cam_model: Pinhole
+  cam_width: 1280
+  cam_height: 720
+  scale: 1
+  cam_fx: 635.221
+  cam_fy: 636.414
+  cam_cx: 635.881
+  cam_cy: 358.556
+  cam_d0: -0.0474827
+  cam_d1: 0.0111601
+  cam_d2: -0.00201971
+  cam_d3: 0.000563882
+  cam_d4: 0.0301952
+
+imu:
+  init_time_seconds: 5.0      #静止时间 10
+  init_imu_queue_max_size: 600   #初始化IMU队列最大长度 2000
+  static_odom_pulse : 5            #静止时轮速计输出噪声
+  max_static_gyro_var : 0.5      #静态下陀螺测量方差
+  max_static_acce_var: 0.05     #静态下加计测量方差
+  gravity_norm: 9.81           #重力大小
+  use_speed_for_static_checking: false   #是否使用odom来判断车辆静止（部分数据集没有odom选项）
+
+ndt:
+  max_iteration: 4     
+  voxel_size: 1.0   
+  inv_voxel_size: 1.0 
+  min_effective_pts: 10  
+  min_pts_in_voxel: 5    
+  max_pts_in_voxel: 50 
+  eps: 1e-3
+  res_outlier_th: 5.0 
+  capacity: 100000   
+
+eskf:
+  num_iterations: 3
+  quit_eps: 1e-3
+  imu_dt: 0.01         
+  gyro_var: 1e-5     
+  acce_var : 1e-2      
+  bias_gyro_var : 1e-3  #1e-6
+  bias_acce_var : 1e-3  #1e-4
+  update_bias_gyro : true
+  update_bias_acce : true
+# Lidar:
+
+   

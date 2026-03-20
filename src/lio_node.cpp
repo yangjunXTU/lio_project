@@ -3,10 +3,170 @@
  * @Description:  
  * @Date: 2025-06-19 09:17:49
  * @LastEditors: yangjun_d 295967654@qq.com
- * @LastEditTime: 2025-10-21 07:27:09
+ * @LastEditTime: 2025-10-29 08:22:40
  */
 
+#pragma once
 #include"utils/lio_node.h"
+#include <stdexcept>
+#include <cmath>
+
+namespace {
+
+bool LoadVectorParam(ros::NodeHandle& nh, const std::string& key, std::vector<double>& values, size_t expected_size) {
+    if (!nh.getParam(key, values)) {
+        ROS_ERROR_STREAM("Missing parameter: " << key);
+        return false;
+    }
+    if (values.size() != expected_size) {
+        ROS_ERROR_STREAM("Parameter " << key << " must have " << expected_size << " values, got " << values.size());
+        return false;
+    }
+    return true;
+}
+
+bool LoadVectorParam(ros::NodeHandle& nh, const std::string& key, std::vector<int>& values, size_t expected_size) {
+    if (!nh.getParam(key, values)) {
+        ROS_ERROR_STREAM("Missing parameter: " << key);
+        return false;
+    }
+    if (values.size() != expected_size) {
+        ROS_ERROR_STREAM("Parameter " << key << " must have " << expected_size << " values, got " << values.size());
+        return false;
+    }
+    return true;
+}
+
+bool ValidateRotationMatrix(const Eigen::Matrix3d& R, const std::string& key) {
+    const Eigen::Matrix3d should_be_identity = R.transpose() * R;
+    const double orthogonality_error = (should_be_identity - Eigen::Matrix3d::Identity()).norm();
+    const double determinant_error = std::abs(R.determinant() - 1.0);
+    if (orthogonality_error > 1e-3 || determinant_error > 1e-3) {
+        ROS_ERROR_STREAM("Invalid rotation matrix in " << key
+                         << ", orthogonality error = " << orthogonality_error
+                         << ", determinant error = " << determinant_error);
+        return false;
+    }
+    return true;
+}
+
+bool LoadMatrix3dParam(ros::NodeHandle& nh, const std::string& key, Eigen::Matrix3d& R) {
+    std::vector<double> values;
+    if (!LoadVectorParam(nh, key, values, 9)) {
+        return false;
+    }
+    R = MatFromArray(values);
+    return ValidateRotationMatrix(R, key);
+}
+
+bool LoadVector3dParam(ros::NodeHandle& nh, const std::string& key, Eigen::Vector3d& t) {
+    std::vector<double> values;
+    if (!LoadVectorParam(nh, key, values, 3)) {
+        return false;
+    }
+    t = VecFromArray(values);
+    return true;
+}
+
+bool LoadCameraConfig(ros::NodeHandle& nh, CameraConfig& camera_config) {
+    std::vector<int> image_size;
+    std::vector<double> K_values;
+
+    nh.param<std::string>("camera/model", camera_config.model, std::string("pinhole"));
+    nh.param<double>("camera/scale", camera_config.scale, 1.0);
+
+    if (!LoadVectorParam(nh, "camera/image_size", image_size, 2)) {
+        return false;
+    }
+    if (!LoadVectorParam(nh, "camera/K", K_values, 9)) {
+        return false;
+    }
+    if (!nh.getParam("camera/D", camera_config.D)) {
+        ROS_ERROR_STREAM("Missing parameter: camera/D");
+        return false;
+    }
+    if (camera_config.D.empty()) {
+        ROS_ERROR_STREAM("Parameter camera/D must not be empty");
+        return false;
+    }
+
+    camera_config.width = image_size[0];
+    camera_config.height = image_size[1];
+    camera_config.K = MatFromArray(K_values);
+    return true;
+}
+
+bool LoadVioConfig(ros::NodeHandle& nh, VioConfig& vio_config) {
+    nh.param<int>("vio/pyr_levels", vio_config.pyr_levels, 3);
+    nh.param<int>("vio/half_patch_size", vio_config.half_patch_size, 1);
+    nh.param<int>("vio/max_points", vio_config.max_points, 400);
+    nh.param<int>("vio/gn_iters_per_level", vio_config.gn_iters_per_level, 5);
+    nh.param<int>("vio/min_valid_residuals", vio_config.min_valid_residuals, 80);
+    nh.param<int>("vio/grid_rows", vio_config.grid_rows, 6);
+    nh.param<int>("vio/grid_cols", vio_config.grid_cols, 8);
+    nh.param<int>("vio/max_points_per_cell", vio_config.max_points_per_cell, 2);
+    nh.param<double>("vio/min_gradient", vio_config.min_gradient, 10.0);
+    nh.param<double>("vio/min_depth", vio_config.min_depth, 1.0);
+    nh.param<double>("vio/max_depth", vio_config.max_depth, 30.0);
+    nh.param<double>("vio/huber_delta", vio_config.huber_delta, 10.0);
+    nh.param<double>("vio/info_scale", vio_config.info_scale, 0.01);
+    nh.param<double>("vio/min_inlier_ratio", vio_config.min_inlier_ratio, 0.6);
+    nh.param<double>("vio/max_mean_residual", vio_config.max_mean_residual, 12.0);
+    nh.param<double>("vio/max_update_translation", vio_config.max_update_translation, 0.3);
+    nh.param<double>("vio/max_update_rotation_deg", vio_config.max_update_rotation_deg, 8.0);
+    nh.param<double>("vio/min_keyframe_translation", vio_config.min_keyframe_translation, 0.15);
+    nh.param<double>("vio/min_keyframe_rotation_deg", vio_config.min_keyframe_rotation_deg, 5.0);
+    return true;
+}
+
+bool LoadSemanticConfig(ros::NodeHandle& nh, SemanticConfig& semantic_config) {
+    nh.param<bool>("semantic/enabled", semantic_config.enabled, true);
+    nh.param<bool>("semantic/publish_map_point_rgb", semantic_config.publish_map_point_rgb, true);
+    nh.param<bool>("semantic/publish_map_semantic", semantic_config.publish_map_semantic, true);
+    nh.param<bool>("semantic/highlight_vio_points", semantic_config.highlight_vio_points, true);
+    nh.param<double>("semantic/min_project_depth", semantic_config.min_project_depth, 1.0);
+    nh.param<double>("semantic/max_project_depth", semantic_config.max_project_depth, 30.0);
+    nh.param<double>("semantic/color_fusion_alpha", semantic_config.color_fusion_alpha, 0.7);
+    nh.param<bool>("semantic/display_voxel_enabled", semantic_config.display_voxel_enabled, true);
+    nh.param<double>("semantic/display_voxel_size", semantic_config.display_voxel_size, 0.2);
+    nh.param<int>("semantic/max_display_points", semantic_config.max_display_points, 150000);
+
+    std::vector<int> default_color;
+    std::vector<int> vio_color;
+    if (nh.getParam("semantic/default_color", default_color) && default_color.size() == 3) {
+        semantic_config.default_r = default_color[0];
+        semantic_config.default_g = default_color[1];
+        semantic_config.default_b = default_color[2];
+    }
+    if (nh.getParam("semantic/vio_color", vio_color) && vio_color.size() == 3) {
+        semantic_config.vio_r = vio_color[0];
+        semantic_config.vio_g = vio_color[1];
+        semantic_config.vio_b = vio_color[2];
+    }
+
+    semantic_config.min_project_depth = std::max(1e-3, semantic_config.min_project_depth);
+    semantic_config.max_project_depth = std::max(semantic_config.min_project_depth + 1e-3, semantic_config.max_project_depth);
+    semantic_config.display_voxel_size = std::max(1e-3, semantic_config.display_voxel_size);
+    semantic_config.max_display_points = std::max(1000, semantic_config.max_display_points);
+    return true;
+}
+
+bool LoadPcdSaveConfig(ros::NodeHandle& nh, PcdSaveConfig& pcd_save_config) {
+    nh.param<bool>("pcd_save/save_lidar", pcd_save_config.save_lidar, true);
+    nh.param<bool>("pcd_save/save_rgb", pcd_save_config.save_rgb, false);
+    return true;
+}
+
+bool LoadDebugVisConfig(ros::NodeHandle& nh, DebugVisConfig& debug_vis_config) {
+    nh.param<bool>("debug_vis/publish_img_with_point", debug_vis_config.publish_img_with_point, true);
+    nh.param<int>("debug_vis/max_points", debug_vis_config.max_points, 3000);
+    nh.param<int>("debug_vis/point_radius", debug_vis_config.point_radius, 2);
+    debug_vis_config.max_points = std::max(100, debug_vis_config.max_points);
+    debug_vis_config.point_radius = std::max(1, debug_vis_config.point_radius);
+    return true;
+}
+
+}  // namespace
 
 LIO::LIO(/* args */)
 {
@@ -17,8 +177,13 @@ LIO::LIO(/* args */)
     nh.param<std::string> ("common/imu_topic",IMU_topic,std::string("/livox/imu"));
     nh.param<int>("common/img_en", img_en, 1);
     nh.param<int>("common/lidar_en", lidar_en, 1);
+    visual_enabled_ = (img_en != 0);
 
-    sub_img = nh.subscribe(IMAGE_color.c_str(), 1000000, &LIO::image_callback, this, ros::TransportHints().tcpNoDelay());
+    if (visual_enabled_) {
+        sub_img = nh.subscribe(IMAGE_color.c_str(), 1000000, &LIO::image_callback, this, ros::TransportHints().tcpNoDelay());
+    } else {
+        ROS_WARN("common/img_en == 0, visual pipeline (image callback + VIO + semantic map topics) is disabled.");
+    }
     sub_pcl = nh.subscribe(LiDAR_pointcloud_topic.c_str(), 1000, &LIO::feat_points_cbk, this, ros::TransportHints().tcpNoDelay());
     sub_imu = nh.subscribe(IMU_topic.c_str(), 200000, &LIO::imu_cbk, this, ros::TransportHints().tcpNoDelay());
 
@@ -99,55 +264,68 @@ LIO::LIO(/* args */)
     pub_depth_img = nh.advertise<sensor_msgs::Image>("/pub_depth_img",1000);
     pub_img_comp = nh.advertise<sensor_msgs::Image>("/pub_img/image_raw",1000);
     pub_img_comp_info = nh.advertise<sensor_msgs::CameraInfo>("/pub_img/camera_info",1000);
+    pub_img_with_point = nh.advertise<sensor_msgs::Image>("/pub_img_with_point", 1000);
     pub_depth_img_comp = nh.advertise<sensor_msgs::Image>("/pub_depth_img_comp",1000);
     pub_pcl = nh.advertise<sensor_msgs::PointCloud2>("/mid360/orin",1000);
     pub_pcl_un = nh.advertise<sensor_msgs::PointCloud2>("/mid360/undistort",1000);
     pub_pcl_ndt = nh.advertise<sensor_msgs::PointCloud2>("/mid360/ndt_clod",1000);
+    pub_map_point_rgb_ = nh.advertise<sensor_msgs::PointCloud2>("/map/map_point_rgb", 1000);
+    pub_map_semantic_ = nh.advertise<sensor_msgs::PointCloud2>("/vio/map_semantic", 1000);
     pub_camera_odom = nh.advertise<nav_msgs::Odometry>("/pub_camera_odom",1000);
     pub_path = nh.advertise<nav_msgs::Path>("/pub_apriltag_path",1000);
     pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_map", 10);
     pubPath = nh.advertise<nav_msgs::Path>("/path", 10);
     mavros_pose_publisher = nh.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 10);
 
-    // std::vector<double> ext_t = {-0.011, -0.02329, 0.04412};
-    // std::vector<double> ext_r ={1, 0, 0, 0, 1, 0, 0, 0, 1};
-    ext_t.assign(3, 0.0);
-    ext_r.assign(9, 0.0);
-    cameraextrinT.assign(3, 0.0);
-    cameraextrinR.assign(9, 0.0);
-
-    nh.param<vector<double>>("extrin_calib/extrinsic_T", ext_t, vector<double>());
-    nh.param<vector<double>>("extrin_calib/extrinsic_R", ext_r, vector<double>());
-    nh.param<vector<double>>("extrin_calib/Pcl", cameraextrinT, vector<double>());
-    nh.param<vector<double>>("extrin_calib/Rcl", cameraextrinR, vector<double>());
-
-    Eigen::Vector3d lidar_T_wrt_IMU = VecFromArray(ext_t);
-    Eigen::Matrix3d lidar_R_wrt_IMU = MatFromArray(ext_r);
-    TIL_ = SE3(lidar_R_wrt_IMU, lidar_T_wrt_IMU);
-        
-    Eigen::Vector3d camera_T_wrt_lidar = VecFromArray(cameraextrinT);
-    Eigen::Matrix3d camera_R_wrt_lidar = MatFromArray(cameraextrinR);
-    TLC_ = SE3(camera_R_wrt_lidar, camera_T_wrt_lidar);
-    
     path.header.stamp = ros::Time::now();
     path.header.frame_id = "map";
 
-    slam_mode_ = (img_en && lidar_en) ? LIVO : ONLY_LIO;
+    slam_mode_ = (visual_enabled_ && lidar_en) ? LIVO : ONLY_LIO;
 
-    
+    Eigen::Matrix3d R_i_l = Eigen::Matrix3d::Identity();
+    Eigen::Vector3d t_i_l = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d R_c_l = Eigen::Matrix3d::Identity();
+    Eigen::Vector3d t_c_l = Eigen::Vector3d::Zero();
+
+    if (!LoadMatrix3dParam(nh, "extrinsics/T_i_l/rotation", R_i_l) ||
+        !LoadVector3dParam(nh, "extrinsics/T_i_l/translation", t_i_l) ||
+        !LoadMatrix3dParam(nh, "extrinsics/T_c_l/rotation", R_c_l) ||
+        !LoadVector3dParam(nh, "extrinsics/T_c_l/translation", t_c_l) ||
+        !LoadCameraConfig(nh, camera_config_) ||
+        !LoadVioConfig(nh, vio_config_) ||
+        !LoadSemanticConfig(nh, semantic_config_) ||
+        !LoadPcdSaveConfig(nh, pcd_save_config_) ||
+        !LoadDebugVisConfig(nh, debug_vis_config_)) {
+        throw std::runtime_error("Failed to load sensor configuration from ROS parameters");
+    }
+
+    if (!visual_enabled_) {
+        semantic_config_.enabled = false;
+        semantic_config_.publish_map_point_rgb = false;
+        semantic_config_.publish_map_semantic = false;
+        debug_vis_config_.publish_img_with_point = false;
+        pcd_save_config_.save_rgb = false;
+    }
+
+    T_i_l = SE3(R_i_l, t_i_l);
+    T_l_c = SE3(R_c_l.transpose(), -R_c_l.transpose() * t_c_l);
+
+    // vio_manager.reset(new VIOPtr());
+    vio_manager.reset(new VIO());
+    vio_manager->nav_state_w_i_ptr_ = &nav_state_w_i_;
+    // vio_manager->vio_scan_world = current_scan_world;
+    vio_manager->setImuToLidarExtrinsic(t_i_l, R_i_l);
+    vio_manager->setLidarToCameraExtrinsic(R_c_l, t_c_l);
+
+    vio_manager->initializeVIO();
+    vio_manager->setCameraParameter(camera_config_);
+    vio_manager->setVioParameter(vio_config_);
 }
 
 
 LIO::~LIO()
 {
-
-    // output_cloud.is_dense = false;
-    // output_cloud.width = output_cloud.points.size();
-    // output_cloud.height = 1;
-
-    // pcl::io::savePCDFileASCII("bagtopcd.pcd", output_cloud);
-    // ROS_INFO("save pcd to ./bagtopcd.pcd");
-
+    
 }
 
 void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
@@ -328,6 +506,9 @@ void LIO::imu_cbk(const sensor_msgs::ImuConstPtr &msg_in){
 //9.80665
 
 void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
+    if (!visual_enabled_) {
+        return;
+    }
 
 
     cv_bridge::CvImagePtr cv_ptr_compressed = cv_bridge::toCvCopy( msg, sensor_msgs::image_encodings::BGR8 );
@@ -352,6 +533,8 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
     }
 
     cv::Mat image_cur = cv_ptr_compressed->image;
+    last_rgb_img_ = image_cur.clone();
+    last_rgb_stamp_ = img_time_correct;
     cv_ptr_compressed->image.release();
     img_buffer.push_back(image_cur);
     img_time_buffer.push_back(img_time_correct);
@@ -372,7 +555,7 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
 bool LIO::sync_packages(LidarMeasureGroup &meas)
 {
     if(lidar_buffer_ndt.empty() && lidar_en) return false;
-    if(img_buffer.empty() && img_en) return false;
+    if(img_buffer.empty() && visual_enabled_) return false;
 
     switch (slam_mode_)
     {
@@ -646,7 +829,7 @@ void LIO::Undistort()
             [](const NavStated &s) { return s.GetSE3(); }, Ti, match);
 
         Eigen::Vector3d pi = ToVec3d(pt);
-        Eigen::Vector3d p_compensate = TIL_.inverse() * T_end.inverse() * Ti * TIL_ * pi;
+        Eigen::Vector3d p_compensate = T_i_l.inverse() * T_end.inverse() * Ti * T_i_l * pi;
         // ROS_INFO("[ProcessLidar]--------->Undistort 3");
         pt.x = p_compensate(0);
         pt.y = p_compensate(1);
@@ -673,7 +856,7 @@ void LIO::Align()
 {
     if (scan_undistort_->empty()) return;
     FullCloudPtr scan_undistort_trans(new FullPointCloudType);
-    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_trans, TIL_.matrix().cast<float>());
+    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_trans, T_i_l.matrix().cast<float>());
     scan_undistort_ = scan_undistort_trans;
     
     current_scan_ = ConvertToCloud<FullPointType>(scan_undistort_);
@@ -686,9 +869,9 @@ void LIO::Align()
     CloudPtr current_scan_filter(new PointCloudType);
     voxel.filter(*current_scan_filter);
 
-    if (flg_first_scan_) {
+    if (flg_first_scan_lio) {
         ndt_.AddCloud(current_scan_);
-        flg_first_scan_ = false;
+        flg_first_scan_lio = false;
 
         return;
     }
@@ -702,15 +885,15 @@ void LIO::Align()
     });
 
     auto current_nav_state = ieskf_.GetNominalState();
-
+    nav_state_w_i_ = current_nav_state;
     // 若运动了一定范围，则把点云放入地图中
-    SE3 current_pose = ieskf_.GetNominalSE3();
-    SE3 delta_pose = last_pose_.inverse() * current_pose;
-
+    SE3 T_w_i = ieskf_.GetNominalSE3();
+    SE3 delta_pose = last_keyframe_T_w_i_.inverse() * T_w_i;
+    
     // CloudPtr current_scan_world(new PointCloudType);
     // pcl::PointCloud<pcl::PointXYZINormal>::Ptr current_scan_world{new pcl::PointXYZINormal};
-    pcl::transformPointCloud(*current_scan_filter, *current_scan_world, current_pose.matrix());
-    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_, current_pose.matrix());
+    pcl::transformPointCloud(*current_scan_filter, *current_scan_world, T_w_i.matrix());
+    pcl::transformPointCloud(*scan_undistort_, *scan_undistort_, T_w_i.matrix());
 
     sensor_msgs::PointCloud2 output1;
     pcl::toROSMsg( *scan_undistort_, output1 );
@@ -721,13 +904,31 @@ void LIO::Align()
     pub_pcl_un.publish( output1 );
 
     *pcl_wait_save += *current_scan_world;
+    vio_manager->vio_scan_world = current_scan_world;
+    if (visual_enabled_) {
+        BuildMapPointRGB(current_scan_world, T_w_i);
+        BuildSemanticHighlightCloud(vio_manager ? vio_manager->new_frame_ : FramePtr());
+        PublishSemanticClouds();
+        if (pcd_save_config_.save_rgb && map_point_rgb_ && !map_point_rgb_->empty()) {
+            *rgb_wait_save_ += *map_point_rgb_;
+            if (rgb_wait_save_->size() > 3000000) {
+                UiCloudPtr compact(new UiPointCloudType);
+                DownsampleUiCloud(rgb_wait_save_, compact, semantic_config_.display_voxel_size, 2000000);
+                rgb_wait_save_.swap(compact);
+            }
+        }
+    } else {
+        map_point_rgb_->clear();
+        map_semantic_->clear();
+    }
+    
     // pcl::concatenate(*pcl_wait_save, *current_scan_world, *pcl_wait_save);
 
     if (delta_pose.translation().norm() > 1.0 || delta_pose.so3().log().norm() > deg2rad(10.0)) {
         // 将地图合入NDT中
         
         ndt_.AddCloud(current_scan_world);
-        last_pose_ = current_pose;
+        last_keyframe_T_w_i_ = T_w_i;
     }
     
     publish_odometry(pubOdomAftMapped);
@@ -762,18 +963,217 @@ void LIO::ProcessLidar()
     return;
 }
 
+bool LIO::ProjectWorldPointToImage(const Eigen::Vector3d& pt_w, const SE3& T_c_w, Eigen::Vector2d& uv, double& depth) const
+{
+    if (!vio_manager) {
+        return false;
+    }
+    Eigen::Vector3d pt_c = T_c_w * pt_w;
+    depth = pt_c.z();
+    if (depth <= 0.0 || depth < semantic_config_.min_project_depth || depth > semantic_config_.max_project_depth) {
+        return false;
+    }
+    uv = vio_manager->cameraPointToPixel(pt_c);
+    return vio_manager->isUVEffective(uv);
+}
+
+UiPointType LIO::MakeRGBA(const Eigen::Vector3d& p, int r, int g, int b, int a) const
+{
+    UiPointType out;
+    out.x = p.x();
+    out.y = p.y();
+    out.z = p.z();
+    out.r = static_cast<uint8_t>(std::max(0, std::min(255, r)));
+    out.g = static_cast<uint8_t>(std::max(0, std::min(255, g)));
+    out.b = static_cast<uint8_t>(std::max(0, std::min(255, b)));
+    out.a = static_cast<uint8_t>(std::max(0, std::min(255, a)));
+    return out;
+}
+
+void LIO::BuildMapPointRGB(const CloudPtr& scan_world, const SE3& T_w_i)
+{
+    if (!semantic_config_.enabled || !scan_world || !vio_manager) {
+        return;
+    }
+
+    // Keep the semantic visualization in per-frame mode to match /mid360/ndt_clod behavior.
+    map_point_rgb_->clear();
+    map_point_rgb_->points.reserve(scan_world->points.size());
+
+    const bool has_rgb = !last_rgb_img_.empty() && last_rgb_img_.channels() == 3;
+    if (!has_rgb) {
+        map_point_rgb_->is_dense = false;
+        map_point_rgb_->width = 0;
+        map_point_rgb_->height = 1;
+        return;
+    }
+    const SE3 T_c_w = vio_manager->T_c_i * T_w_i.inverse();
+
+    for (const auto& pt : scan_world->points) {
+        const Eigen::Vector3d p_w(pt.x, pt.y, pt.z);
+        Eigen::Vector2d uv;
+        double depth = 0.0;
+        if (!ProjectWorldPointToImage(p_w, T_c_w, uv, depth)) {
+            continue;
+        }
+        const int u = static_cast<int>(std::round(uv.x()));
+        const int v = static_cast<int>(std::round(uv.y()));
+        if (u < 0 || u >= last_rgb_img_.cols || v < 0 || v >= last_rgb_img_.rows) {
+            continue;
+        }
+        const cv::Vec3b color = last_rgb_img_.at<cv::Vec3b>(v, u);
+        const int b = static_cast<int>(color[0]);
+        const int g = static_cast<int>(color[1]);
+        const int r = static_cast<int>(color[2]);
+        map_point_rgb_->points.emplace_back(MakeRGBA(p_w, r, g, b, 255));
+    }
+
+    map_point_rgb_->is_dense = false;
+    map_point_rgb_->width = static_cast<uint32_t>(map_point_rgb_->points.size());
+    map_point_rgb_->height = 1;
+    if (semantic_config_.display_voxel_enabled && !map_point_rgb_->empty()) {
+        UiCloudPtr compact(new UiPointCloudType);
+        DownsampleUiCloud(map_point_rgb_, compact, semantic_config_.display_voxel_size, semantic_config_.max_display_points);
+        map_point_rgb_.swap(compact);
+    }
+}
+
+void LIO::BuildSemanticHighlightCloud(const FramePtr& frame_ref)
+{
+    if (!semantic_config_.enabled) {
+        return;
+    }
+    map_semantic_->clear();
+    *map_semantic_ = *map_point_rgb_;
+    if (!semantic_config_.highlight_vio_points || !frame_ref) {
+        return;
+    }
+
+    for (const auto& pt : frame_ref->pts) {
+        map_semantic_->points.emplace_back(
+            MakeRGBA(pt.pt_w, semantic_config_.vio_r, semantic_config_.vio_g, semantic_config_.vio_b, 255));
+    }
+    map_semantic_->is_dense = false;
+    map_semantic_->width = static_cast<uint32_t>(map_semantic_->points.size());
+    map_semantic_->height = 1;
+    if (semantic_config_.display_voxel_enabled && !map_semantic_->empty()) {
+        UiCloudPtr compact(new UiPointCloudType);
+        DownsampleUiCloud(map_semantic_, compact, semantic_config_.display_voxel_size, semantic_config_.max_display_points);
+        map_semantic_.swap(compact);
+    }
+}
+
+void LIO::DownsampleUiCloud(const UiCloudPtr& in, UiCloudPtr& out, double voxel_size, int max_points) const
+{
+    if (!in) {
+        return;
+    }
+    pcl::VoxelGrid<UiPointType> voxel;
+    voxel.setLeafSize(static_cast<float>(voxel_size), static_cast<float>(voxel_size), static_cast<float>(voxel_size));
+    voxel.setInputCloud(in);
+    voxel.filter(*out);
+
+    if (out->size() > static_cast<size_t>(max_points)) {
+        UiCloudPtr sampled(new UiPointCloudType);
+        sampled->points.reserve(max_points);
+        const double step = static_cast<double>(out->size()) / static_cast<double>(max_points);
+        for (int i = 0; i < max_points; ++i) {
+            sampled->points.push_back(out->points[static_cast<size_t>(i * step)]);
+        }
+        sampled->is_dense = false;
+        sampled->width = static_cast<uint32_t>(sampled->points.size());
+        sampled->height = 1;
+        out.swap(sampled);
+    } else {
+        out->is_dense = false;
+        out->width = static_cast<uint32_t>(out->points.size());
+        out->height = 1;
+    }
+}
+
+void LIO::PublishSemanticClouds()
+{
+    if (!semantic_config_.enabled) {
+        return;
+    }
+    if (semantic_config_.publish_map_point_rgb && pub_map_point_rgb_ && !map_point_rgb_->empty()) {
+        sensor_msgs::PointCloud2 msg_rgb;
+        pcl::toROSMsg(*map_point_rgb_, msg_rgb);
+        msg_rgb.header.frame_id = "map";
+        msg_rgb.header.stamp = ros::Time::now();
+        pub_map_point_rgb_.publish(msg_rgb);
+    }
+
+    if (semantic_config_.publish_map_semantic && pub_map_semantic_ && !map_semantic_->empty()) {
+        sensor_msgs::PointCloud2 msg_semantic;
+        pcl::toROSMsg(*map_semantic_, msg_semantic);
+        msg_semantic.header.frame_id = "map";
+        msg_semantic.header.stamp = ros::Time::now();
+        pub_map_semantic_.publish(msg_semantic);
+    }
+}
+
+void LIO::publishImageWithProjectedPoints()
+{
+    if (!visual_enabled_ || !debug_vis_config_.publish_img_with_point || !vio_manager || !vio_manager->new_frame_) {
+        return;
+    }
+    if (vio_manager->new_frame_->img_.empty()) {
+        return;
+    }
+
+    cv::Mat img_vis = vio_manager->new_frame_->img_.clone();
+    int draw_count = 0;
+    const auto& selected_pts = vio_manager->new_frame_->pts;
+    const size_t total_points = selected_pts.size();
+    if (total_points == 0) {
+        return;
+    }
+    const size_t step = std::max<size_t>(1, total_points / static_cast<size_t>(debug_vis_config_.max_points));
+
+    for (size_t i = 0; i < total_points; i += step) {
+        const auto& pt = selected_pts[i];
+        const int u = static_cast<int>(std::round(pt.px_ref.x()));
+        const int v = static_cast<int>(std::round(pt.px_ref.y()));
+        if (u < 0 || u >= img_vis.cols || v < 0 || v >= img_vis.rows) {
+            continue;
+        }
+        cv::circle(img_vis, cv::Point(u, v), debug_vis_config_.point_radius, cv::Scalar(255), -1);
+        draw_count++;
+        if (draw_count >= debug_vis_config_.max_points) {
+            break;
+        }
+    }
+
+    cv::putText(img_vis, "VIO init pts: " + std::to_string(draw_count), cv::Point(20, 30),
+                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255), 2);
+
+    cv_bridge::CvImage msg_out;
+    msg_out.header.stamp = ros::Time::now();
+    msg_out.header.frame_id = "map";
+    msg_out.encoding = sensor_msgs::image_encodings::MONO8;
+    msg_out.image = img_vis;
+    pub_img_with_point.publish(msg_out.toImageMsg());
+}
+
 void LIO::savePCD()
 {
-    if (pcl_wait_save->empty()) return;
+    if ((!pcd_save_config_.save_lidar || !pcl_wait_save || pcl_wait_save->empty()) &&
+        (!visual_enabled_ || !pcd_save_config_.save_rgb || !rgb_wait_save_ || rgb_wait_save_->empty())) {
+        return;
+    }
     pcl::PCDWriter pcd_writer;
     std::string raw_points_dir = "/home/yangj/Robot/code/lio_project_wk/src/lio_project/Log/PCD/all_raw_points.pcd";
+    std::string rgb_points_dir = "/home/yangj/Robot/code/lio_project_wk/src/lio_project/Log/PCD/all_rgb_points.pcd";
     
-    if (pcl_wait_save->size() > 0)
+    if (pcd_save_config_.save_lidar && pcl_wait_save && pcl_wait_save->size() > 0)
     {
         pcd_writer.writeBinary(raw_points_dir, *pcl_wait_save);
-        // ROS_INFO("Raw point cloud data saved to: %s, with point count: %ld" ,
-        //     raw_points_dir.c_str() , pcl_wait_save->points.size() );
         std::cout << "Raw point cloud data saved to: " << raw_points_dir << ", with point count: " << pcl_wait_save->points.size() << std::endl;
+    }
+    if (visual_enabled_ && pcd_save_config_.save_rgb && rgb_wait_save_ && rgb_wait_save_->size() > 0) {
+        pcd_writer.writeBinary(rgb_points_dir, *rgb_wait_save_);
+        std::cout << "RGB point cloud data saved to: " << rgb_points_dir << ", with point count: " << rgb_wait_save_->points.size() << std::endl;
     }
     
 }
@@ -804,19 +1204,19 @@ void LIO::publish_odometry(const ros::Publisher &pubOdomAftMapped)
 
 template <typename T> void LIO::set_posestamp(T &out)
 {
-    SE3 current_pose = ieskf_.GetNominalSE3();
-    Eigen::Vector3d position = current_pose.matrix().block<3,1>(0,3);
+    SE3 T_w_i = ieskf_.GetNominalSE3();
+    Eigen::Vector3d position = T_w_i.matrix().block<3,1>(0,3);
     out.position.x = position.x();
     out.position.y = position.y();
     out.position.z = position.z();
 
-    Eigen::Matrix3d rotation_matrix = current_pose.matrix().block<3,3>(0,0);
+    Eigen::Matrix3d rotation_matrix = T_w_i.matrix().block<3,3>(0,0);
     Eigen::Quaterniond quaternion(rotation_matrix);
     quaternion.normalize();  // 规范化四元数（确保是单位四元数）
 
     out.orientation.x = quaternion.x();
     out.orientation.y = quaternion.y();
-    out.orientation.z = quaternion.y();
+    out.orientation.z = quaternion.z();
     out.orientation.w = quaternion.w();
 }
 
@@ -839,60 +1239,63 @@ void LIO::publish_mavros(const ros::Publisher &mavros_pose_publisher)
 
 void LIO::ProcessCamera()
 {
+    if (!visual_enabled_) return;
     if(lidar_buffer_ndt.empty() && lidar_en) return;
-    if(img_buffer.empty() && img_en) return;
-
+    if(img_buffer.empty() && visual_enabled_) return;
+    // ROS_INFO("--------------------------------------------5");
     if (pcl_wait_save->empty() || (pcl_wait_save == nullptr)) 
     {
         std::cout << "[ VIO ] No point!!!" << std::endl;
         return;
     }
-
+    ROS_INFO("--------------------------------------------6");
     initcamera();
+    
     handleVIO();
 
 }
 
 void LIO::initcamera()
 {
+    
     return;
 }
 
 void LIO::handleVIO()
 {
-    if (image_get.empty()) return;
-    
-    // cv::Mat left_img = cv::imread(left_file, 0);   
-    // cv::Mat disparity_img = cv::imread(disparity_file, 0);
+    if (!visual_enabled_ || !vio_manager) {
+        return;
+    }
+    // if (image_get.empty()) return;
+    SE3 T_w_i_meas;
+    vio_manager->processFrame(LidarMeasures.measures.back().img, T_w_i_meas);
+    if (!vio_manager->visual_measurement_ready_) {
+        return;
+    }
 
-    // // let's randomly pick pixels in the first image and generate some 3d points in the first image's frame
-    // cv::RNG rng;
-    // int nPoints = 2000;
-    // int boarder = 20;
-    // VecVector2d pixels_ref;
-    // vector<double> depth_ref;
+    ieskf_.UpdateUsingCustomObserve([this](const SE3 &input_pose, Mat18d &HTVH, Vec18d &HTVr) {
+        vio_manager->ComputeResidualAndJacobians(input_pose, HTVH, HTVr);
+    });
+    const auto& tracking_stats = vio_manager->trackingStats();
+    ROS_INFO("[VIO] frame stats: candidates=%d selected=%d valid=%d inliers=%d mean_abs=%.3f accepted=%d promote=%d",
+             tracking_stats.candidate_points, tracking_stats.selected_points, tracking_stats.valid_residuals,
+             tracking_stats.inlier_residuals, tracking_stats.mean_abs_residual,
+             tracking_stats.update_accepted, tracking_stats.promote_reference);
+    if (tracking_stats.promote_reference) {
+        vio_manager->finalizeFrame();
+    } else if (!tracking_stats.update_accepted) {
+        vio_manager->visual_measurement_ready_ = false;
+    }
 
-    // // generate pixels in ref and load depth data
-    // for (int i = 0; i < nPoints; i++) {
-    //     int x = rng.uniform(boarder, left_img.cols - boarder);  // don't pick pixels close to boarder
-    //     int y = rng.uniform(boarder, left_img.rows - boarder);  // don't pick pixels close to boarder
-    //     int disparity = disparity_img.at<uchar>(y, x);
-    //     double depth = fx * baseline / disparity; // you know this is disparity to depth
-    //     depth_ref.push_back(depth);
-    //     pixels_ref.push_back(Eigen::Vector2d(x, y));
-    // }
+    cv_bridge::CvImage out_msg;
+    out_msg.header.stamp = ros::Time::now();               // Same timestamp and tf frame as input image
+    out_msg.encoding = sensor_msgs::image_encodings::MONO8; // Or whatever BGR8
+    out_msg.image = vio_manager->new_frame_->img_;                                   // Your cv::Mat
+    out_msg.header.frame_id = "map";
 
-    // // estimates 01~05.png's pose using this information
-    // Sophus::SE3 T_cur_ref;
-
-    // for (int i = 1; i < 6; i++) {  // 1~10
-    //     cv::Mat img = cv::imread((fmt_others % i).str(), 0);
-    //     // try single layer by uncomment this line
-    //     DirectPoseEstimationSingleLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref);
-    //     // DirectPoseEstimationMultiLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref);
-    // }
-    // return 0;
-
+    // std::cout<<"color frame id : "<< out_msg.header.frame_id << endl;
+    pub_img.publish( out_msg );
+    publishImageWithProjectedPoints();
     
 }
 
@@ -908,7 +1311,7 @@ void LIO::run()
         auto time1 = std::chrono::high_resolution_clock::now(); 
         if (!sync_packages(LidarMeasures))  
         {   
-            ROS_INFO("--------------------------------------------1");
+            // ROS_INFO("--------------------------------------------1");
             // // std::cout <<"imu: " << LidarMeasures.measures.back().imu.back()->header.stamp.toSec() << std::endl;
             // ROS_INFO("[LidarMeasures] LidarMeasures measures.size: %ld",LidarMeasures.measures.size());
             // ROS_INFO("[LidarMeasures] LidarMeasures lidar_frame_end_time: %.6f",LidarMeasures.lidar_frame_end_time);
@@ -918,16 +1321,16 @@ void LIO::run()
             rate.sleep();
             continue;
         }
-        ROS_INFO("--------------------------------------------2.2");
+        // ROS_INFO("--------------------------------------------2.2");
         handleFirstFrame();
-        ROS_INFO("--------------------------------------------2");
+        // ROS_INFO("--------------------------------------------2");
         auto time2 = std::chrono::high_resolution_clock::now(); 
 
         ProcessIMU();
-        ROS_INFO("--------------------------------------------3");
+        // ROS_INFO("--------------------------------------------3");
         
         ProcessLidar();
-
+        // ROS_INFO("--------------------------------------------4");
         ProcessCamera();
         auto time3 = std::chrono::high_resolution_clock::now(); 
         std::chrono::duration<double> duration_time = time2 - time1;
@@ -941,7 +1344,4 @@ void LIO::run()
         ROS_INFO("[ProcessIMU and ProcessLidar mode] time: %.06lf ms", duration_time_seconds2 * 1000);
     }
     savePCD();
-    ros::spin();
-
-    
 }

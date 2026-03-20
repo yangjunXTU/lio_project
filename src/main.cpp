@@ -12,12 +12,7 @@
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "lio_project_node");
-  
-  LIO * fast_lio_instance = new LIO();
-
-  fast_lio_instance->run();
-  ros::Rate rate(30);
-  bool status = ros::ok();
-  ros::spin();
-
+  LIO fast_lio_instance;
+  fast_lio_instance.run();
+  return 0;
 }

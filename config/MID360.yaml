@@ -1,68 +1,171 @@
 common:
-  img_topic: "/bot_rear/color/image_raw"
-  lidar_topic: "/livox/lidar_192_168_1_164"
-  imu_topic: "/livox/imu_192_168_1_164"
-  #lidar_topic: "/livox/lidar"
-  #imu_topic: "/livox/imu"
+  # ROS topics
+  img_topic: "/camera/color/image_raw"
+  lidar_topic: "/livox/lidar"
+  imu_topic: "/livox/imu"
+  # Sensor enable flags: 1 = enable, 0 = disable
+  # img_en: 0 will disable all visual processing, including:
+  # image callback, VIO update, /map/map_point_rgb, /vio/map_semantic, /pub_img_with_point, and RGB PCD saving.
   img_en: 1
   lidar_en: 1
 
-extrin_calib:
-  # extrinsic_T: [0.04165, 0.02326, -0.0284]
-  extrinsic_T: [-0.011, -0.02329, 0.04412] # mid360 imuTolidar
-  extrinsic_R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+extrinsics:
+  # Transform naming rule:
+  # T_a_b means transforming a point from frame b into frame a.
+  # rotation is a 3x3 row-major matrix: [r00, r01, r02, r10, ..., r22]
+  # translation is [tx, ty, tz] in meters.
 
-  Rcl: [0.986915,-0.159948,-0.0204072,
-          -0.0799042,-0.375201,-0.923493,
-          0.140054,0.91304,-0.38307]
+  T_i_l:
+    # LiDAR -> IMU extrinsic
+    rotation: [1.0, 0.0, 0.0,
+               0.0, 1.0, 0.0,
+               0.0, 0.0, 1.0]
+    translation: [-0.011, -0.02329, 0.04412]
 
-  Pcl: [-0.0303444, 0.864,  0.557813]
-  
+  T_c_l:
+    # LiDAR -> Camera extrinsic
+    # rotation: [-0.0167798, -0.999766, 0.0136439,
+    #             0.005557, -0.0137388, -0.99989,
+    #             0.999844, -0.0167021, 0.00578623]
+    # translation: [-0.0270529, -0.0715923, -0.120225]
+    rotation: [0.999882, 0.0149446, 0.00360136,
+                0.0024022, 0.0794962, -0.996832,
+                -0.0151835, 0.996732, 0.0794509]
+    translation: [-0.00425277, -0.08573004, -0.219389]
+
 camera:
-  cam_model: Pinhole
-  cam_width: 1280
-  cam_height: 720
-  scale: 0.5
-  cam_fx: 751.838
-  cam_fy: 751.081
-  cam_cx: 638.518
-  cam_cy: 357.483
-  cam_d0: 0.0701399
-  cam_d1: -0.0975887
-  cam_d2: 0.0002862
-  cam_d3: 0.0001975
-  cam_d4: 0.0392827
+  # Camera model name used by the current VIO implementation
+  model: "pinhole"
+  # Image size: [width, height] in pixels
+  image_size: [640, 480]
+  # Optional image scale factor used by the pipeline
+  scale: 1.0
+  # Camera intrinsic matrix K in row-major order:
+  # [fx,  0, cx,
+  #   0, fy, cy,
+  #   0,  0,  1]
+  # K: [635.221, 0.0, 635.881,
+  #     0.0, 636.414, 358.556,
+  #     0.0, 0.0, 1.0]
+  K: [468.334, 0.0, 321.973,
+      0.0, 469.243, 233.717,
+      0.0, 0.0, 1.0]
+  # Distortion coefficients for the current Brown-Conrady model.
+  # Order expected by the code: [k1, k2, k3, p1, p2]
+  D: [0.11764, -0.290339, -0.0034144, 0.000379094, 0.149025]
+
+vio:
+  # Number of pyramid levels used by the SVO-style coarse-to-fine alignment.
+  # 3 means: original image, 1/2 image, 1/4 image.
+  pyr_levels: 3
+  # Half patch size in pixels for the fixed patch pattern.
+  # 1 -> 3x3 patch, 2 -> 5x5 patch.
+  half_patch_size: 1
+  # Maximum number of LiDAR-projected visual points kept in one reference frame.
+  max_points: 400
+  # Gauss-Newton iterations per pyramid level in the multi-layer direct alignment.
+  gn_iters_per_level: 5
+  # Grid sampling on the image plane. Each cell keeps only the strongest few candidates
+  # so that visual constraints stay spatially balanced instead of clustering in one region.
+  grid_rows: 6
+  grid_cols: 8
+  max_points_per_cell: 2
+  # Minimum number of valid patch residuals required before accepting a visual update.
+  min_valid_residuals: 120
+  # Minimum image gradient magnitude used for selecting visual points.
+  min_gradient: 15.0
+  # Keep only LiDAR points whose projected depth in the camera is inside this range, in meters.
+  min_depth: 1.0
+  max_depth: 30.0
+  # Huber threshold used to reduce the effect of large photometric residuals.
+  huber_delta: 8.0
+  # Overall information scaling for visual residuals before entering the ESKF.
+  # Start conservative. Increase only after the residual statistics stay stable.
+  info_scale: 0.1
+  # Update gate: only accept the visual update when these quality checks pass.
+  min_inlier_ratio: 0.6
+  max_mean_residual: 12.0
+  max_update_translation: 0.3
+  max_update_rotation_deg: 8.0
+  # Promote the current frame to a new visual reference only when it is both reliable
+  # and has moved enough relative to the last reference.
+  min_keyframe_translation: 0.15
+  min_keyframe_rotation_deg: 5.0
+
+semantic:
+  # Master switch for semantic-colored map publishing.
+  enabled: true
+  # Publish RGB-colored map cloud to /map/map_point_rgb
+  publish_map_point_rgb: true
+  # Publish semantic-highlight cloud to /vio/map_semantic
+  publish_map_semantic: true
+  # Highlight VIO-selected visual points in semantic cloud.
+  highlight_vio_points: true
+  # RGB projection depth gate in camera frame (meters).
+  min_project_depth: 1.0
+  max_project_depth: 30.0
+  # Reserved for multi-view color smoothing.
+  color_fusion_alpha: 0.7
+  # Default color for map points without valid RGB projection.
+  default_color: [180, 180, 180]
+  # Highlight color for VIO selected points.
+  vio_color: [255, 64, 64]
+  # Downsample semantic display cloud to keep RViz responsive.
+  display_voxel_enabled: true
+  display_voxel_size: 0.2
+  max_display_points: 150000
+
+pcd_save:
+  # Save geometry map as all_raw_points.pcd
+  save_lidar: false
+  # Save RGB map as all_rgb_points.pcd
+  save_rgb: true
+
+debug_vis:
+  # Publish image with projected cloud points.
+  publish_img_with_point: true
+  # Max number of VIO initial selected points drawn on one frame.
+  max_points: 3000
+  # Point radius on visualization image.
+  point_radius: 2
 
 imu:
-  init_time_seconds: 5.0      #静止时间 10
-  init_imu_queue_max_size: 600   #初始化IMU队列最大长度 2000
-  static_odom_pulse : 5            #静止时轮速计输出噪声
-  max_static_gyro_var : 0.5      #静态下陀螺测量方差
-  max_static_acce_var: 0.05     #静态下加计测量方差
-  gravity_norm: 9.81           #重力大小
-  use_speed_for_static_checking: false   #是否使用odom来判断车辆静止（部分数据集没有odom选项）
+  # Static initialization duration in seconds
+  init_time_seconds: 5.0
+  # Maximum IMU samples buffered during static initialization
+  init_imu_queue_max_size: 600
+  # Static odometry pulse threshold
+  static_odom_pulse: 5
+  # Maximum allowed gyro variance during static initialization
+  max_static_gyro_var: 0.5
+  # Maximum allowed accelerometer variance during static initialization
+  max_static_acce_var: 0.05
+  # Gravity magnitude in m/s^2
+  gravity_norm: 9.81
+  # Whether to use speed / odom information to assist static detection
+  use_speed_for_static_checking: false
 
 ndt:
-  max_iteration: 4     
-  voxel_size: 1.0   
-  inv_voxel_size: 1.0 
-  min_effective_pts: 10  
-  min_pts_in_voxel: 5    
-  max_pts_in_voxel: 50 
+  # NDT registration parameters
+  max_iteration: 4
+  voxel_size: 1.0
+  inv_voxel_size: 1.0
+  min_effective_pts: 10
+  min_pts_in_voxel: 5
+  max_pts_in_voxel: 50
   eps: 1e-3
-  res_outlier_th: 5.0 
-  capacity: 100000   
+  res_outlier_th: 5.0
+  capacity: 100000
 
 eskf:
+  # Iterated ESKF update parameters
   num_iterations: 3
   quit_eps: 1e-3
-  imu_dt: 0.01         
-  gyro_var: 1e-5     
-  acce_var : 1e-2      
-  bias_gyro_var : 1e-6
-  bias_acce_var : 1e-4
-  update_bias_gyro : true
-  update_bias_acce : true
-# Lidar:
-
-   
+  imu_dt: 0.01
+  # IMU noise / bias random walk parameters
+  gyro_var: 1e-5
+  acce_var: 1e-2
+  bias_gyro_var: 1e-3
+  bias_acce_var: 1e-3
+  update_bias_gyro: true
+  update_bias_acce: true

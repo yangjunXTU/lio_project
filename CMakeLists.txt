@@ -166,7 +166,9 @@ add_executable(${PROJECT_NAME}_node src/main.cpp
                                     src/static_imu_init.cpp 
                                     src/ndt_inc.cpp 
                                     include/timer/timer.cc
-                                    src/direct_method.cpp)
+                                    src/direct_method.cpp
+                                    src/frame.cpp
+                                    src/vio.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
