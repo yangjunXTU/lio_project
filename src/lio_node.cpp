@@ -173,7 +173,7 @@ bool LoadDebugVisConfig(ros::NodeHandle& nh, DebugVisConfig& debug_vis_config) {
 
 }  // namespace
 
-LIO::LIO(/* args */)
+LIO::LIO()
 {
     FullCloudPtr scan_undistort_{new FullPointCloudType()};
     
@@ -228,7 +228,6 @@ LIO::LIO(/* args */)
                     res_outlier_th,
                     capacity);
 
-    // ESKF 参数配置
     nh.param<int>("eskf/num_iterations",  num_iterations, 3);
     nh.param<double>("eskf/quit_eps",  quit_eps, 1e-3);
     nh.param<double>("eskf/imu_dt",  imu_dt, 0.01);
@@ -239,7 +238,6 @@ LIO::LIO(/* args */)
     nh.param<bool>("eskf/update_bias_gyro",  update_bias_gyro, true);
     nh.param<bool>("eskf/update_bias_acce",  update_bias_acce, true);
 
-    // 设置ESKF参数
     ieskf_.SetOptions(
         num_iterations,
         quit_eps,
@@ -251,19 +249,11 @@ LIO::LIO(/* args */)
         update_bias_gyro,
         update_bias_acce
     );
-
-
-
-    if(1)
-        {
-            
-            cout << "\033[31;1m======= Summary of subscribed topics =======\033[0m" << endl; 
-            cout << "\033[31;1mLiDAR pointcloud topic: " << LiDAR_pointcloud_topic << "\033[0m" << endl;
-            cout << "\033[31;1mIMU topic: " << IMU_topic << "\033[0m" << endl;
-            cout << "\033[31;1mImage topic: " << IMAGE_color << "\033[0m" << endl;
-            cout << "\033[31;1m=======        -End-                =======\033[0m" << endl;
-            
-        }
+    cout << "\033[31;1m======= Summary of subscribed topics =======\033[0m" << endl;
+    cout << "\033[31;1mLiDAR pointcloud topic: " << LiDAR_pointcloud_topic << "\033[0m" << endl;
+    cout << "\033[31;1mIMU topic: " << IMU_topic << "\033[0m" << endl;
+    cout << "\033[31;1mImage topic: " << IMAGE_color << "\033[0m" << endl;
+    cout << "\033[31;1m=======        -End-                =======\033[0m" << endl;
 
     pub_img = nh.advertise<sensor_msgs::Image>("/pub_img",1000);
     pub_img_with_point = nh.advertise<sensor_msgs::Image>("/pub_img_with_point", 1000);
@@ -309,10 +299,8 @@ LIO::LIO(/* args */)
     T_i_l = SE3(R_i_l, t_i_l);
     T_l_c = SE3(R_c_l.transpose(), -R_c_l.transpose() * t_c_l);
 
-    // vio_manager.reset(new VIOPtr());
     vio_manager.reset(new VIO());
     vio_manager->nav_state_w_i_ptr_ = &nav_state_w_i_;
-    // vio_manager->vio_scan_world = current_scan_world;
     vio_manager->setImuToLidarExtrinsic(t_i_l, R_i_l);
     vio_manager->setLidarToCameraExtrinsic(R_c_l, t_c_l);
 
@@ -341,21 +329,16 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
     cloud_full.resize( plsize );
     for ( uint i = 1; i < plsize; i++ )
     {
-        // clang-format off
-        // pcl::PointXYZI p;
         if ( ( msg->points[ i ].line < 4 ) 
             && ( !IS_VALID( msg->points[ i ].x ) ) 
             && ( !IS_VALID( msg->points[ i ].y ) ) 
             && ( !IS_VALID( msg->points[ i ].z ) )
              )   //&& msg->points[ i ].x > 0.7
         {
-            // https://github.com/Livox-SDK/Livox-SDK/wiki/Livox-SDK-Communication-Protocol
-            // See [3.4 Tag Information] 
             if ( ( msg->points[ i ].x > 2.0 )
                 && ( ( ( msg->points[ i ].tag & 0x03 ) != 0x00 )  ||  ( ( msg->points[ i ].tag & 0x0C ) != 0x00 )  || ( ( msg->points[ i ].tag & 0x30 ) != 0x00 ))
                 )
             {
-                // Remove the bad quality points
                 continue;
             }
 
@@ -364,7 +347,6 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
             if((dis_i <1 && msg->points[i].x>-0.35 && msg->points[i].x < 0.35 && msg->points[i].y < -0.05 && msg->points[i].y > -0.5
             && msg->points[i].z < 1.1)  )
             {
-                // ROS_INFO("dis_i=%f;\n",dis_i);
                 continue;
             }
 
@@ -378,12 +360,6 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
 
     }
 
-    // cloud_full.height = 1;
-    // cloud_full.width = cloud_full.size();
-    
-    //*ptr = pl_full;
-    
-    //Mid360Handler(msg);
     FullCloudPtr ptr_ndt(new FullPointCloudType());
     *ptr_ndt = pl_full;
 
@@ -393,7 +369,6 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
 
     lidar_buffer_ndt.push_back(ptr_ndt);
 
-    //lid_raw_data_buffer.push_back(ptr);
     lid_header_time_buffer.push_back(msg->header.stamp.toSec());
     last_timestamp_lidar = msg->header.stamp.toSec();
 
@@ -403,60 +378,10 @@ void LIO::feat_points_cbk(  const livox_ros_driver2::CustomMsg::ConstPtr &msg  )
     
     output.header.frame_id = "map";
     output.header.stamp = msg->header.stamp;
-    // std::cout<<"360 frame id : "<< output.header.frame_id << endl;
     pub_pcl.publish( output );
     
 }
 
-// void LIO::Mid360Handler(const livox_ros_driver2::CustomMsg::ConstPtr &msg) {
-//     cloud_out_.clear();
-//     cloud_full_.clear();
-//     int plsize = msg->point_num;
-
-//     cloud_out_.reserve(plsize);
-//     cloud_full_.resize(plsize);
-
-//     std::vector<bool> is_valid_pt(plsize, false);
-//     std::vector<uint> index(plsize - 1);
-//     for (uint i = 0; i < plsize - 1; ++i) {
-//         index[i] = i + 1;  // 从1开始
-//     }
-//     // std::execution::par_unseq, 
-//     std::for_each(index.begin(), index.end(), [&](const uint &i) {
-//         if ((msg->points[i].line < num_scans_) &&
-//             ((msg->points[i].tag & 0x30) == 0x10 || (msg->points[i].tag & 0x30) == 0x00)) {
-//                 if (msg->points[i].x < -0.5 || msg->points[i].x > 0.5 || 
-//                     msg->points[i].y < -1.5  || msg->points[i].y > 0.3 || 
-//                     msg->points[i].z < 0.1 || msg->points[i].z > -1.7) // filter out points with invalid coordinates
-//                     {
-//                         if (i % point_filter_num_ == 0) {
-//                                 cloud_full_[i].x = msg->points[i].x;
-//                                 cloud_full_[i].y = msg->points[i].y;
-//                                 cloud_full_[i].z = msg->points[i].z;
-//                                 cloud_full_[i].intensity = msg->points[i].reflectivity;
-//                                 cloud_full_[i].offset_time = msg->points[i].offset_time / float(1000000);
-
-//                                 if ((abs(cloud_full_[i].x - cloud_full_[i - 1].x) > 1e-7) ||
-//                                     (abs(cloud_full_[i].y - cloud_full_[i - 1].y) > 1e-7) ||
-//                                     (abs(cloud_full_[i].z - cloud_full_[i - 1].z) > 1e-7)) {
-//                                     is_valid_pt[i] = true;
-//                                 }
-//                             }
-                        
-//                     }
-            
-//         }
-//     });
-
-//     for (uint i = 1; i < plsize; i++) {
-//         if (is_valid_pt[i]) {
-//             cloud_out_.points.push_back(cloud_full_[i]);
-//         }
-//     }
-// }
-
-
-//处理的imu一个点
 void LIO::imu_cbk(const sensor_msgs::ImuConstPtr &msg_in){
 
     if (last_timestamp_lidar < 0.0) return;
@@ -495,14 +420,11 @@ void LIO::imu_cbk(const sensor_msgs::ImuConstPtr &msg_in){
                                 Eigen::Vector3d(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z),
                                 Eigen::Vector3d(msg->linear_acceleration.x * 9.80665, msg->linear_acceleration.y * 9.80665,
                                     msg->linear_acceleration.z * 9.80665  ));
-    //imu_buffer.push_back(msg);
     imu_buffer.push_back(imu);
     mtx_buffer.unlock();
 
     return;
 }
-
-//9.80665
 
 void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
     if (!visual_enabled_) {
@@ -513,7 +435,6 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
     cv_bridge::CvImagePtr cv_ptr_compressed = cv_bridge::toCvCopy( msg, sensor_msgs::image_encodings::BGR8 );
     double msg_header_time = msg->header.stamp.toSec(); //+ img_time_offset;
     if (abs(msg_header_time - last_timestamp_img) < 0.001) return;
-    // ROS_INFO("Get image, its header time: %.6f", msg_header_time);
     if (last_timestamp_lidar < 0) return;
 
     if (msg_header_time < last_timestamp_img)
@@ -541,14 +462,6 @@ void LIO::image_callback( const sensor_msgs::ImageConstPtr &msg ){
     last_timestamp_img = img_time_correct;
     mtx_buffer.unlock();
 
-    // cv_bridge::CvImage out_msg;
-    // out_msg.header.stamp = msg->header.stamp;               // Same timestamp and tf frame as input image
-    // out_msg.encoding = sensor_msgs::image_encodings::BGR8; // Or whatever
-    // out_msg.image = image_get;                                   // Your cv::Mat
-    // out_msg.header.frame_id = "map";
-
-    // // std::cout<<"color frame id : "<< out_msg.header.frame_id << endl;
-    // pub_img.publish( out_msg );
 }
 
 bool LIO::sync_packages(LidarMeasureGroup &meas)

@@ -81,7 +81,6 @@ struct DebugVisConfig {
 class LIO
 {
 private:
-    /* data */
     IESKFD ieskf_;
     std::vector<NavStated> imu_states_;
     NavStated nav_state_w_i_;
@@ -91,11 +90,8 @@ private:
     SE3 T_l_c;  // camera与lidar之间的外参  C -> L
     FullCloudPtr scan_undistort_;
     
-    
     int num_scans_ = 4;                          // 扫描线数mid360
     int point_filter_num_ = 1;                   // 跳点
-    // FullCloudPtr scan_undistort_trans(new FullPointCloudType);
-    /// NDT数据
     CloudPtr current_scan_ = nullptr;
     CloudPtr pcl_wait_save{new PointCloudType};
     CloudPtr current_scan_world{new PointCloudType};
@@ -104,7 +100,6 @@ private:
     UiCloudPtr rgb_wait_save_{new UiPointCloudType};
     cv::Mat last_rgb_img_;
     double last_rgb_stamp_ = -1.0;
-    // pcl::PointCloud<pcl::PointXYZINormal>::Ptr pcl_wait_save{new pcl::PointXYZINormal};
     bool flg_first_scan_lio = true;
     
     int frame_num_ = 0;
@@ -115,16 +110,13 @@ private:
     
     void Undistort();
     void Align();
-    //void Mid360Handler(const livox_ros_driver2::CustomMsg::ConstPtr &msg);
 
 public:
     std::mutex mtx_buffer, mtx_buffer_imu_prop;
-    //deque<PointCloudXYZI::Ptr> lid_raw_data_buffer;
 
     deque<FullCloudPtr> lidar_buffer_ndt;
     deque<double> lid_header_time_buffer;
     
-    //deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
     deque<IMUPtr> imu_buffer;
 
     deque<cv::Mat> img_buffer;
@@ -155,7 +147,6 @@ public:
     ros::Publisher pub_img_with_point;
     ros::Publisher pub_map_point_rgb_, pub_map_semantic_;
     ros::Publisher pubOdomAftMapped,pubPath,mavros_pose_publisher;
-    // nav_msgs::Path path;
 
     std::string LiDAR_pointcloud_topic, IMU_topic, IMAGE_color;
 
@@ -165,7 +156,6 @@ public:
     nav_msgs::Odometry odomAftMapped;
     geometry_msgs::PoseStamped msg_body_pose;
 
-    //imu参数配置
     double init_time_seconds = 5.0;     // 静止时间 10
     int init_imu_queue_max_size = 600;  // 初始化IMU队列最大长度 2000
     int static_odom_pulse = 5;           // 静止时轮速计输出噪声
@@ -174,7 +164,6 @@ public:
     double gravity_norm = 9.81;          // 重力大小
     bool use_speed_for_static_checking = false;  // 是否使用odom来判断车辆静止（部分数据集没有odom选项）
     
-    //ndt参数配置
     int max_iteration = 4;        // 最大迭代次数
     double voxel_size = 1.0;      // 体素大小
     double inv_voxel_size = 1.0;  // 体素大小之逆
@@ -186,7 +175,6 @@ public:
     int  capacity = 100000;     // 缓存的体素数量
     
 
-    //eskf参数配置
     int num_iterations = 3;  // 迭代次数
     double quit_eps = 1e-3;  // 终止迭代的dx大小
     double imu_dt = 0.01;         // IMU测量间隔
@@ -196,17 +184,12 @@ public:
     double bias_acce_var = 1e-4;  // 加计零偏游走标准差
     bool update_bias_gyro = true;  // 是否更新bias
     bool update_bias_acce = true;  // 是否更新bias
-
-
-
-
     void image_callback( const sensor_msgs::ImageConstPtr &msg );
     void feat_points_cbk( const livox_ros_driver2::CustomMsg::ConstPtr &msg  );
     void imu_cbk(const sensor_msgs::ImuConstPtr &msg_in);
     void run();
     bool sync_packages(LidarMeasureGroup &meas);
     void handleFirstFrame();
-    //IMUPtr imu2IMU(const sensor_msgs::ImuConstPtr &mg_in);
     void ProcessIMU();
     void TryInitIMU();
     void ProcessLidar();
@@ -226,6 +209,6 @@ public:
     void publish_path(const ros::Publisher pubPath);
     void publish_mavros(const ros::Publisher &mavros_pose_publisher);
 
-    LIO(/* args */);
+    LIO();
     ~LIO();
 };
